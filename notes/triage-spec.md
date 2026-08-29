@@ -5,9 +5,10 @@ against `author:ameyypawar`: **77 open PRs**, 18 with failing CI, 1 changes-requ
 13 awaiting review.
 
 ## Query
-`search(query: "is:open is:pr author:<login> archived:false", type: ISSUE)` returning per PR:
+`search(query: "is:open is:pr author:@me archived:false", type: ISSUE)` returning per PR:
 `repository.nameWithOwner`, `number`, `title`, `url`, `isDraft`, `createdAt`, `updatedAt`,
 `reviewDecision`, `commits(last:1).commit.statusCheckRollup.state`, `comments`, `reviews`.
+`author:@me` resolves against the bearer token on each request — not a configured login.
 
 ## Triage buckets — "who is this waiting on?"
 

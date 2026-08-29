@@ -29,6 +29,6 @@ export const env = {
   SERVER_URL: required("SERVER_URL"),
   /** GitHub PAT fallback for local dev. Optional — prefer `getGitHubToken()` over reading this directly. */
   GITHUB_TOKEN: optional("GITHUB_TOKEN"),
-  /** GitHub login (username) whose PRs are searched. Optional until the AuthPlane token broker is wired. */
+  /** GitHub login (username). No longer read on the broker path — `fetchOpenPullRequests` now searches `author:@me` and reads `viewer.login` from the token itself. Kept for a possible future `GITHUB_TOKEN` env-fallback identity story. */
   GITHUB_LOGIN: optional("GITHUB_LOGIN"),
 };

@@ -115,7 +115,7 @@ const server = new McpServer(
             staleDays: z.number(),
           }),
         ),
-        login: z.string(),
+        login: z.string().optional(),
         tokenSource: z.enum(["broker", "env", "none"]),
         connectPrompt: z
           .object({
@@ -130,10 +130,6 @@ const server = new McpServer(
       view: { component: "pr-radar", description: "Open PRs triaged by who needs to act next" },
     },
     async (input, extra) => {
-      if (!env.GITHUB_LOGIN) {
-        throw new Error("GITHUB_LOGIN is not set. Add it to .env before calling pr-radar.");
-      }
-
       let token: string;
       let source: GitHubTokenSource;
       let connectPrompt: { needed: true; url: string; reason: string } | undefined;
@@ -164,7 +160,6 @@ const server = new McpServer(
               totalCount: 0,
               counts: { blockedOnYou: 0, waitingOnMaintainer: 0, stale: 0, draft: 0 },
               prs: [] as PullRequestSummary[],
-              login: env.GITHUB_LOGIN,
               tokenSource: "none" as const,
               connectPrompt: {
                 needed: true as const,
@@ -185,11 +180,13 @@ const server = new McpServer(
 
       let issueCount: number;
       let rawPrs: RawPullRequest[];
+      let login: string | undefined;
 
       try {
-        const fetched = await fetchOpenPullRequests(token, env.GITHUB_LOGIN);
+        const fetched = await fetchOpenPullRequests(token);
         issueCount = fetched.issueCount;
         rawPrs = fetched.prs;
+        login = fetched.login;
       } catch (err) {
         return {
           content: [
@@ -208,7 +205,7 @@ const server = new McpServer(
           totalCount: issueCount,
           counts,
           prs,
-          login: env.GITHUB_LOGIN,
+          login,
           tokenSource: source,
           connectPrompt,
         },

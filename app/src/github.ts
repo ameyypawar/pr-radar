@@ -12,6 +12,7 @@ const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
  */
 const OPEN_PULL_REQUESTS_QUERY = `
   query($q: String!) {
+    viewer { login }
     search(query: $q, type: ISSUE, first: 40) {
       issueCount
       nodes {
@@ -60,6 +61,8 @@ export interface FetchOpenPullRequestsResult {
   issueCount: number;
   /** Up to 40 fetched PR nodes. */
   prs: RawPullRequest[];
+  /** Login of the token holder, per `viewer.login`. Undefined if the response didn't include it — callers must not assume it is present. */
+  login: string | undefined;
 }
 
 interface GraphQlErrorPayload {
@@ -68,6 +71,7 @@ interface GraphQlErrorPayload {
 
 interface GraphQlResponse {
   data?: {
+    viewer?: { login: string } | null;
     search?: {
       issueCount: number;
       nodes: (Partial<RawPullRequest> | null)[] | null;
@@ -77,13 +81,15 @@ interface GraphQlResponse {
 }
 
 /**
- * Fetches every open PR authored by `login`, using `token` as the GitHub
- * bearer credential. Throws a clear `Error` on a non-200 response or a
- * GraphQL-level `errors` payload; never throws on null/missing nested
- * fields in a successful response.
+ * Fetches every open PR authored by the holder of `token`, using `token` as
+ * the GitHub bearer credential. `author:@me` resolves against that token, so
+ * the result set — and the returned `login` — follow whoever the token
+ * belongs to. Throws a clear `Error` on a non-200 response or a GraphQL-level
+ * `errors` payload; never throws on null/missing nested fields in a
+ * successful response.
  */
-export async function fetchOpenPullRequests(token: string, login: string): Promise<FetchOpenPullRequestsResult> {
-  const q = `is:open is:pr author:${login} archived:false`;
+export async function fetchOpenPullRequests(token: string): Promise<FetchOpenPullRequestsResult> {
+  const q = `is:open is:pr author:@me archived:false`;
 
   const res = await fetch(GITHUB_GRAPHQL_URL, {
     method: "POST",
@@ -119,5 +125,7 @@ export async function fetchOpenPullRequests(token: string, login: string): Promi
       !!node && typeof node.number === "number" && typeof node.url === "string" && typeof node.updatedAt === "string",
   );
 
-  return { issueCount: search.issueCount, prs };
+  const login = json.data?.viewer?.login;
+
+  return { issueCount: search.issueCount, prs, login };
 }
