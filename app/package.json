@@ -1,8 +1,8 @@
 {
-  "name": "app",
+  "name": "pr-radar",
   "version": "0.0.1",
   "private": true,
-  "description": "Blank Skybridge MCP server template",
+  "description": "MCP app that triages your open GitHub pull requests and flags which ones are waiting on you.",
   "type": "module",
   "scripts": {
     "dev": "skybridge dev",

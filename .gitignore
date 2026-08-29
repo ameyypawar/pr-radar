@@ -1,9 +1,10 @@
 # secrets — never commit
-infra/.secrets.env
+*.env
 **/.env
 .env
 .env.*
 !.env.example
+!notes/timings.env
 
 # deps / build
 node_modules/
@@ -20,7 +21,6 @@ infra/data/
 .DS_Store
 .vscode/
 .idea/
-infra/urls.env
 
 # claude session exports (contain secrets/passwords) — never commit
 infra/*.txt

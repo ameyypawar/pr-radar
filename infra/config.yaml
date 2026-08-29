@@ -1,8 +1,8 @@
 server:
-  issuer: "https://concentration-editorials-discounted-award.trycloudflare.com"
+  issuer: "${AUTHPLANE_ISSUER}"
   address: ":9000"
   allowed_origins:
-    - "*"
+    - "https://cyan-schools-roll-396.alpic.dev"
 
 storage:
   driver: sqlite
@@ -48,7 +48,7 @@ data_encryption:
 
 connect:
   state_secret: "${AUTHPLANE_CONNECT_STATE_SECRET}"
-  redirect_base_url: "https://concentration-editorials-discounted-award.trycloudflare.com"
+  redirect_base_url: "${AUTHPLANE_REDIRECT_BASE_URL}"
   allowed_return_urls:
     - "https://cyan-schools-roll-396.alpic.dev"
     - "https://cyan-schools-roll-396.alpic.dev/mcp"
