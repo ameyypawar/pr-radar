@@ -21,15 +21,12 @@ function countByBucket(prs: PullRequestSummary[]) {
   };
 }
 
-/** One-line, model-readable summary of what needs the user's attention. */
-function summarize(totalCount: number, prs: PullRequestSummary[]): string {
+/** One-line, model-readable summary. Deliberately terse: the view renders the full list, so this must not enumerate individual PRs. */
+function summarize(totalCount: number, counts: ReturnType<typeof countByBucket>): string {
   if (totalCount === 0) {
     return "You have no open pull requests.";
   }
-  const blocked = prs.filter((pr) => pr.bucket === "BLOCKED_ON_YOU");
-  const changesRequested = blocked.filter((pr) => pr.reviewDecision === "CHANGES_REQUESTED").length;
-  const failingCi = blocked.filter((pr) => pr.ciState === "FAILURE").length;
-  return `${blocked.length} of ${totalCount} open PRs need you: ${changesRequested} with changes requested, ${failingCi} with failing CI.`;
+  return `Results are shown in the view above. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
 }
 
 /** Readable message for any caught error, so handlers never leak `[object Object]` or a raw stack. */
@@ -67,7 +64,9 @@ const server = new McpServer(
     const clientId = extra.authInfo?.clientId;
     return {
       structuredContent: { subject, email, scopes, clientId, verifiedAt: new Date().toISOString() },
-      content: [{ type: "text" as const, text: `Signed in as ${email ?? subject ?? "unknown"}` }],
+      content: [
+        { type: "text" as const, text: `Signed in as ${email ?? subject ?? "unknown"} — full details in the view above.` },
+      ],
       isError: false,
     };
   },
@@ -76,7 +75,7 @@ const server = new McpServer(
     {
       name: "pr-radar",
       description:
-        "List your open GitHub pull requests, triaged by who needs to act next: blocked on you (changes requested or failing CI), stale (no activity in 14+ days), waiting on a maintainer, or draft.",
+        "Fetch your open GitHub pull requests, triaged by who needs to act next: blocked on you (changes requested or failing CI), stale (no activity in 14+ days), waiting on a maintainer, or draft. Results render in an interactive view — do not restate them in your reply.",
       inputSchema: {
         bucket: z
           .string()
@@ -172,7 +171,7 @@ const server = new McpServer(
           tokenSource: source,
           connectPrompt,
         },
-        content: [{ type: "text" as const, text: summarize(issueCount, allPrs) }],
+        content: [{ type: "text" as const, text: summarize(issueCount, counts) }],
         isError: false,
       };
     },
