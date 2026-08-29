@@ -10,15 +10,13 @@ import "./pr-radar.css";
 
 const SKELETON_ROW_COUNT = 3;
 
-function tokenSourceLabel(source: string): string | null {
+function tokenSourceLabel(source: "broker" | "env" | "none"): string | null {
   switch (source) {
     case "broker":
       return "token via GitHub connection";
     case "env":
       return "token via local .env";
     case "none":
-      return null;
-    default:
       return null;
   }
 }
@@ -128,14 +126,38 @@ function PrRadarSkeleton() {
   );
 }
 
+/** isSuccess with a null output: the call finished (server returned
+ * `isError: true` with no `structuredContent`, which is legal) but left
+ * nothing to render. Distinct from isPending — see pr-radar.css. */
+function PrRadarFailed() {
+  const { theme } = useLayout();
+  const [mode] = useDisplayMode();
+  const isFullscreen = mode === "fullscreen";
+  return (
+    <div className={`sb-root pr-root${isFullscreen ? " pr-fullscreen" : ""} ${themeClass(theme)}`.trim()}>
+      <div className="pr-failed">
+        <div className="pr-failed-title">Couldn’t load your PR radar</div>
+        <div className="pr-failed-sub">The call finished but returned nothing to render — see the chat reply for what went wrong.</div>
+      </div>
+    </div>
+  );
+}
+
 function PrRadarView() {
   const info = useToolInfo<"pr-radar">();
   const { theme } = useLayout();
   const [mode, setMode] = useDisplayMode();
   const [{ layout }, setLayoutState] = useViewState<{ layout: BoardLayout }>({ layout: "urgency" });
 
-  if (!info.isSuccess || !info.output) {
+  if (info.isPending) {
     return <PrRadarSkeleton />;
+  }
+
+  // isSuccess && !output — reachable: the server can return isError:true
+  // with no structuredContent. That's still "success" per useToolInfo
+  // (responseMetadata arrived), just nothing to render.
+  if (!info.output) {
+    return <PrRadarFailed />;
   }
 
   const { totalCount, truncated, counts, prs, login, tokenSource, connectPrompt } = info.output;
