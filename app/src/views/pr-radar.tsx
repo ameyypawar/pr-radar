@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useLayout, type Theme } from "skybridge/web";
 import { useToolInfo } from "../helpers.js";
 import type { Bucket, PullRequestSummary } from "../triage.js";
@@ -20,11 +20,11 @@ const CHIPS: Array<{ bucket: Bucket; emoji: string; label: string; countKey: key
   { bucket: "DRAFT", emoji: "⚪", label: "Draft", countKey: "draft" },
 ];
 
-const BUCKET_PILL_CLASS: Record<Bucket, string> = {
-  BLOCKED_ON_YOU: "pr-pill-blocked",
-  WAITING_ON_MAINTAINER: "pr-pill-waiting",
-  STALE: "pr-pill-stale",
-  DRAFT: "pr-pill-draft",
+const BUCKET_GROUP_CLASS: Record<Bucket, string> = {
+  BLOCKED_ON_YOU: "pr-group-blocked",
+  WAITING_ON_MAINTAINER: "pr-group-waiting",
+  STALE: "pr-group-stale",
+  DRAFT: "pr-group-draft",
 };
 
 const BUCKET_LABEL: Record<Bucket, string> = {
@@ -34,10 +34,17 @@ const BUCKET_LABEL: Record<Bucket, string> = {
   DRAFT: "Draft",
 };
 
-function ciMeta(state: string | null): { dot: string; label: string } {
+const BUCKET_COUNT_KEY: Record<Bucket, keyof BucketCounts> = {
+  BLOCKED_ON_YOU: "blockedOnYou",
+  WAITING_ON_MAINTAINER: "waitingOnMaintainer",
+  STALE: "stale",
+  DRAFT: "draft",
+};
+
+function ciMeta(state: string | null): { dot: string; label: string } | null {
   switch (state) {
     case "SUCCESS":
-      return { dot: "pr-dot-green", label: "CI passing" };
+      return { dot: "pr-dot-green", label: "" };
     case "FAILURE":
       return { dot: "pr-dot-red", label: "CI failing" };
     case "ERROR":
@@ -47,7 +54,7 @@ function ciMeta(state: string | null): { dot: string; label: string } {
     case "EXPECTED":
       return { dot: "pr-dot-gray", label: "CI expected" };
     default:
-      return { dot: "pr-dot-gray", label: "No CI" };
+      return null;
   }
 }
 
@@ -79,9 +86,8 @@ function tokenSourceLabel(source: string): string | null {
 
 function updatedLabel(staleDays: number | null): string {
   if (staleDays === null) return "last update unknown";
-  if (staleDays <= 0) return "updated today";
-  if (staleDays === 1) return "updated 1 day ago";
-  return `updated ${staleDays} days ago`;
+  if (staleDays <= 6) return "";
+  return staleDays === 1 ? "updated 1 day ago" : `updated ${staleDays} days ago`;
 }
 
 function themeClass(theme: Theme | undefined): string {
@@ -90,26 +96,30 @@ function themeClass(theme: Theme | undefined): string {
 
 function PrRow({ pr }: { pr: PullRequestSummary }) {
   const ci = ciMeta(pr.ciState);
+  const labels = [ci?.label, reviewLabel(pr.reviewDecision), updatedLabel(pr.staleDays)].filter(
+    (label): label is string => Boolean(label),
+  );
   return (
     <a className="pr-row" href={pr.url} target="_blank" rel="noreferrer">
-      <div className="pr-row-top">
+      <div className="pr-title">{pr.title}</div>
+      <div className="pr-row-meta">
+        {ci ? <span className={`pr-dot ${ci.dot}`} aria-hidden="true" /> : null}
+        {labels.map((label, i) => (
+          <Fragment key={i}>
+            {i > 0 ? (
+              <span className="pr-meta-sep" aria-hidden="true">
+                ·
+              </span>
+            ) : null}
+            <span>{label}</span>
+          </Fragment>
+        ))}
+        <span className="pr-meta-sep" aria-hidden="true">
+          ·
+        </span>
         <span className="pr-repo">
           {pr.repo} <span className="pr-number">#{pr.number}</span>
         </span>
-        <span className={`pr-pill ${BUCKET_PILL_CLASS[pr.bucket]}`}>{BUCKET_LABEL[pr.bucket]}</span>
-      </div>
-      <div className="pr-title">{pr.title}</div>
-      <div className="pr-row-meta">
-        <span className={`pr-dot ${ci.dot}`} aria-hidden="true" />
-        <span>{ci.label}</span>
-        <span className="pr-meta-sep" aria-hidden="true">
-          ·
-        </span>
-        <span>{reviewLabel(pr.reviewDecision)}</span>
-        <span className="pr-meta-sep" aria-hidden="true">
-          ·
-        </span>
-        <span>{updatedLabel(pr.staleDays)}</span>
       </div>
     </a>
   );
@@ -162,16 +172,17 @@ function PrRadarView() {
 
       <div className="pr-header">
         <div className="pr-header-count">
+          {counts.blockedOnYou === 0 && prs.length > 0 ? "Nothing needs you" : `${counts.blockedOnYou} need you`}
+        </div>
+        <div className="pr-header-sub">
           {totalCount} open PR{totalCount === 1 ? "" : "s"}
+          {login ? ` · @${login}` : ""}
         </div>
         {truncated ? (
           <div className="pr-header-sub">
             Showing {prs.length} of {totalCount}
           </div>
         ) : null}
-        <div className="pr-header-sub">
-          {counts.blockedOnYou} of {totalCount} need you
-        </div>
       </div>
 
       <div className="pr-chips">
@@ -186,7 +197,10 @@ function PrRadarView() {
               onClick={() => setSelectedBucket((current) => (current === bucket ? null : bucket))}
             >
               <span aria-hidden="true">{emoji}</span> {label}
-              <span className="pr-chip-count">{counts[countKey]}</span>
+              <span className="pr-chip-count">
+                {counts[countKey]}
+                {truncated ? "+" : ""}
+              </span>
             </button>
           );
         })}
@@ -200,7 +214,7 @@ function PrRadarView() {
       ) : prs.length === 0 ? (
         <div className="pr-empty">
           <div className="pr-empty-title">You&rsquo;re all caught up</div>
-          <div className="pr-empty-sub">No open pull requests for {login}.</div>
+          <div className="pr-empty-sub">{login ? `No open pull requests for ${login}.` : "No open pull requests."}</div>
         </div>
       ) : visiblePrs.length === 0 ? (
         <div className="pr-empty">
@@ -211,16 +225,20 @@ function PrRadarView() {
         </div>
       ) : (
         <div className="pr-list">
-          {visiblePrs.map((pr) => (
-            <PrRow key={`${pr.repo}#${pr.number}`} pr={pr} />
+          {visiblePrs.map((pr, i) => (
+            <Fragment key={`${pr.repo}#${pr.number}`}>
+              {!selectedBucket && (i === 0 || visiblePrs[i - 1].bucket !== pr.bucket) ? (
+                <div className={`pr-group ${BUCKET_GROUP_CLASS[pr.bucket]}`}>
+                  {BUCKET_LABEL[pr.bucket]} · {counts[BUCKET_COUNT_KEY[pr.bucket]]}
+                </div>
+              ) : null}
+              <PrRow pr={pr} />
+            </Fragment>
           ))}
         </div>
       )}
 
-      <div className="pr-meta-footer">
-        <span>@{login}</span>
-        {tokenLabel ? <span>{tokenLabel}</span> : null}
-      </div>
+      <div className="pr-meta-footer">{tokenLabel ? <span>{tokenLabel}</span> : null}</div>
     </div>
   );
 }
