@@ -1,6 +1,12 @@
+import { useLayout, type Theme } from "skybridge/web";
 import { useToolInfo } from "../helpers.js";
 import { ErrorBoundary } from "../components/error-boundary.js";
+import "./tokens.css";
 import "./radar-ping.css";
+
+function themeClass(theme: Theme | undefined): string {
+  return theme === "dark" ? "sb-theme-dark" : theme === "light" ? "sb-theme-light" : "";
+}
 
 function initials(label: string): string {
   const local = label.includes("@") ? label.split("@")[0] : label;
@@ -21,10 +27,12 @@ function formatVerifiedAt(iso: string | undefined): string | undefined {
 
 function RadarPingView() {
   const info = useToolInfo<"radar-ping">();
+  const { theme } = useLayout();
+  const rootClass = `sb-root rp-root ${themeClass(theme)}`.trim();
 
   if (!info.isSuccess || !info.output) {
     return (
-      <div className="rp-root">
+      <div className={rootClass}>
         <div className="rp-skeleton-label">Verifying your identity…</div>
         <div className="rp-card">
           <div className="rp-skeleton-avatar" />
@@ -43,7 +51,7 @@ function RadarPingView() {
   const verifiedLabel = formatVerifiedAt(verifiedAt);
 
   return (
-    <div className="rp-root">
+    <div className={rootClass}>
       <div className="rp-card">
         <div className="rp-avatar" aria-hidden="true">
           {initials(label)}

@@ -1,0 +1,65 @@
+/**
+ * Shared design tokens for the pr-radar views (pr-radar, radar-ping) and the
+ * error boundary — one definition for the three callers. Import this before
+ * the per-view sheet.
+ *
+ * Layout mirrors the primitives/contract split in alpic-ai/skybridge's own
+ * ecommerce template (skills/chatgpt-app-builder/references/ecommerce.md,
+ * "Phase 5: design system"): raw values live here, per-view sheets keep only
+ * what is genuinely per-view (bucket palette, avatar gradient). Expressed as
+ * plain custom properties instead of vanilla-extract — the point is the
+ * single import door, not the tooling.
+ *
+ * Every view root carries "sb-root" alongside its own root class
+ * (e.g. className="sb-root pr-root"), so it inherits the font, radius,
+ * max-width, and surface tokens below.
+ */
+
+.sb-root {
+  --sb-font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --sb-radius: 12px;
+  --sb-max-width: 420px;
+
+  --sb-bg: #ffffff;
+  --sb-card-bg: #ffffff;
+  --sb-border: #e5e7eb;
+  --sb-text: #111827;
+  --sb-muted: #6b7280;
+  --sb-skeleton: #e5e7eb;
+
+  font-family: var(--sb-font);
+  color: var(--sb-text);
+  background: var(--sb-bg);
+  max-width: var(--sb-max-width);
+}
+
+.sb-root.sb-theme-dark {
+  --sb-bg: #111214;
+  --sb-card-bg: #17181d;
+  --sb-border: #2b2d34;
+  --sb-text: #f4f4f5;
+  --sb-muted: #9aa1ac;
+  --sb-skeleton: #2b2d34;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sb-root:not(.sb-theme-light) {
+    --sb-bg: #111214;
+    --sb-card-bg: #17181d;
+    --sb-border: #2b2d34;
+    --sb-text: #f4f4f5;
+    --sb-muted: #9aa1ac;
+    --sb-skeleton: #2b2d34;
+  }
+}
+
+@keyframes sb-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}

@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useLayout, type Theme } from "skybridge/web";
 import { useToolInfo } from "../helpers.js";
 import type { Bucket, PullRequestSummary } from "../triage.js";
 import { ErrorBoundary } from "../components/error-boundary.js";
+import "./tokens.css";
 import "./pr-radar.css";
 
 interface BucketCounts {
@@ -41,7 +43,7 @@ function ciMeta(state: string | null): { dot: string; label: string } {
     case "ERROR":
       return { dot: "pr-dot-red", label: "CI error" };
     case "PENDING":
-      return { dot: "pr-dot-amber", label: "CI pending" };
+      return { dot: "pr-dot-pending", label: "CI pending" };
     case "EXPECTED":
       return { dot: "pr-dot-gray", label: "CI expected" };
     default:
@@ -82,6 +84,10 @@ function updatedLabel(staleDays: number | null): string {
   return `updated ${staleDays} days ago`;
 }
 
+function themeClass(theme: Theme | undefined): string {
+  return theme === "dark" ? "sb-theme-dark" : theme === "light" ? "sb-theme-light" : "";
+}
+
 function PrRow({ pr }: { pr: PullRequestSummary }) {
   const ci = ciMeta(pr.ciState);
   return (
@@ -110,8 +116,9 @@ function PrRow({ pr }: { pr: PullRequestSummary }) {
 }
 
 function PrRadarSkeleton() {
+  const { theme } = useLayout();
   return (
-    <div className="pr-root">
+    <div className={`sb-root pr-root ${themeClass(theme)}`.trim()}>
       <div className="pr-skeleton-label">Loading your PR radar…</div>
       <div className="pr-skeleton-line" style={{ width: "45%", height: 18 }} />
       <div className="pr-skeleton-line" style={{ width: "65%", marginTop: 6 }} />
@@ -132,6 +139,7 @@ function PrRadarSkeleton() {
 function PrRadarView() {
   const info = useToolInfo<"pr-radar">();
   const [selectedBucket, setSelectedBucket] = useState<Bucket | null>(null);
+  const { theme } = useLayout();
 
   if (!info.isSuccess || !info.output) {
     return <PrRadarSkeleton />;
@@ -142,7 +150,7 @@ function PrRadarView() {
   const tokenLabel = tokenSourceLabel(tokenSource);
 
   return (
-    <div className="pr-root">
+    <div className={`sb-root pr-root ${themeClass(theme)}`.trim()}>
       {connectPrompt?.needed ? (
         <div className="pr-connect-banner">
           <span>{connectPrompt.reason}</span>

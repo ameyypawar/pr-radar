@@ -1,0 +1,43 @@
+/**
+ * ErrorBoundary's fallback renders outside .pr-root / .rp-root — it replaces
+ * the view on failure, so it cannot inherit either view's tokens. It carries
+ * "sb-root" directly (for --sb-radius / --sb-font) plus its own host-theme
+ * class (see ../views/tokens.css), and defines its own error palette here
+ * rather than reusing var(--pr-blocked-bg) etc., which are only in scope
+ * inside .pr-root. The values match that pair exactly in both modes.
+ */
+
+.pr-error {
+  --pr-error-bg: #fee2e2;
+  --pr-error-text: #b91c1c;
+  --pr-error-border: #fecaca;
+
+  margin: 8px;
+  padding: 12px;
+  border: 1px solid var(--pr-error-border);
+  border-radius: var(--sb-radius);
+  background: var(--pr-error-bg);
+  color: var(--pr-error-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pr-error.sb-theme-dark {
+  --pr-error-bg: rgba(239, 68, 68, 0.16);
+  --pr-error-text: #fca5a5;
+  --pr-error-border: rgba(239, 68, 68, 0.32);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-error:not(.sb-theme-light) {
+    --pr-error-bg: rgba(239, 68, 68, 0.16);
+    --pr-error-text: #fca5a5;
+    --pr-error-border: rgba(239, 68, 68, 0.32);
+  }
+}
+
+.pr-error-message {
+  margin-top: 4px;
+  font-size: 12px;
+  word-break: break-word;
+}

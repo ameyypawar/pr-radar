@@ -1,11 +1,5 @@
 .pr-root {
-  --pr-bg: #ffffff;
-  --pr-card-bg: #ffffff;
-  --pr-border: #e5e7eb;
-  --pr-text: #111827;
-  --pr-muted: #6b7280;
   --pr-row-hover: #f9fafb;
-  --pr-skeleton: #e5e7eb;
 
   --pr-blocked-bg: #fee2e2;
   --pr-blocked-text: #b91c1c;
@@ -18,32 +12,43 @@
 
   --pr-dot-green: #22c55e;
   --pr-dot-red: #ef4444;
-  --pr-dot-amber: #f59e0b;
   --pr-dot-gray: #9ca3af;
 
   --pr-chip-bg: #f3f4f6;
   --pr-chip-active-bg: #111827;
   --pr-chip-active-text: #ffffff;
 
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  color: var(--pr-text);
-  background: var(--pr-bg);
-  max-width: 420px;
+  --pr-accent: #2563eb;
+
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+.pr-root.sb-theme-dark {
+  --pr-row-hover: #1c1d23;
+
+  --pr-blocked-bg: rgba(239, 68, 68, 0.16);
+  --pr-blocked-text: #fca5a5;
+  --pr-waiting-bg: rgba(245, 158, 11, 0.16);
+  --pr-waiting-text: #fcd34d;
+  --pr-stale-bg: rgba(129, 140, 248, 0.16);
+  --pr-stale-text: #b4bcfa;
+  --pr-draft-bg: rgba(156, 163, 175, 0.16);
+  --pr-draft-text: #d1d5db;
+
+  --pr-dot-gray: #6b7280;
+
+  --pr-chip-bg: #1c1d23;
+  --pr-chip-active-bg: #f4f4f5;
+  --pr-chip-active-text: #111214;
+
+  --pr-accent: #60a5fa;
+}
+
 @media (prefers-color-scheme: dark) {
-  .pr-root {
-    --pr-bg: #111214;
-    --pr-card-bg: #17181d;
-    --pr-border: #2b2d34;
-    --pr-text: #f4f4f5;
-    --pr-muted: #9aa1ac;
+  .pr-root:not(.sb-theme-light) {
     --pr-row-hover: #1c1d23;
-    --pr-skeleton: #2b2d34;
 
     --pr-blocked-bg: rgba(239, 68, 68, 0.16);
     --pr-blocked-text: #fca5a5;
@@ -59,6 +64,8 @@
     --pr-chip-bg: #1c1d23;
     --pr-chip-active-bg: #f4f4f5;
     --pr-chip-active-text: #111214;
+
+    --pr-accent: #60a5fa;
   }
 }
 
@@ -71,9 +78,10 @@
   flex-wrap: wrap;
   gap: 4px 10px;
   padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--pr-waiting-bg);
-  color: var(--pr-waiting-text);
+  border-radius: var(--sb-radius);
+  background: transparent;
+  border: 1px solid var(--sb-border);
+  color: var(--sb-text);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -102,7 +110,7 @@
 
 .pr-header-sub {
   font-size: 12px;
-  color: var(--pr-muted);
+  color: var(--sb-muted);
 }
 
 /* Bucket chips */
@@ -120,7 +128,7 @@
   font: inherit;
   font-size: 11px;
   font-weight: 500;
-  color: var(--pr-text);
+  color: var(--sb-text);
   background: var(--pr-chip-bg);
   border: 1px solid transparent;
   border-radius: 999px;
@@ -131,7 +139,7 @@
 }
 
 .pr-chip:hover {
-  border-color: var(--pr-border);
+  border-color: var(--sb-border);
 }
 
 .pr-chip-active {
@@ -155,9 +163,9 @@
 .pr-row {
   display: block;
   padding: 10px 12px;
-  border: 1px solid var(--pr-border);
-  border-radius: 12px;
-  background: var(--pr-card-bg);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius);
+  background: var(--sb-card-bg);
   text-decoration: none;
   color: inherit;
   min-width: 0;
@@ -167,8 +175,10 @@
   background: var(--pr-row-hover);
 }
 
-.pr-row:focus-visible {
-  outline: 2px solid var(--pr-stale-text);
+.pr-row:focus-visible,
+.pr-chip:focus-visible,
+.pr-clear-filter:focus-visible {
+  outline: 2px solid var(--pr-accent);
   outline-offset: 2px;
 }
 
@@ -183,7 +193,7 @@
 .pr-repo {
   font-size: 11px;
   font-weight: 600;
-  color: var(--pr-muted);
+  color: var(--sb-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -196,7 +206,7 @@
 
 .pr-pill {
   flex: none;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   padding: 3px 8px;
@@ -241,7 +251,7 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: var(--pr-muted);
+  color: var(--sb-muted);
 }
 
 .pr-dot {
@@ -260,8 +270,9 @@
   background: var(--pr-dot-red);
 }
 
-.pr-dot-amber {
-  background: var(--pr-dot-amber);
+.pr-dot-pending {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--pr-dot-gray);
 }
 
 .pr-dot-gray {
@@ -269,7 +280,7 @@
 }
 
 .pr-meta-sep {
-  color: var(--pr-border);
+  color: var(--sb-border);
 }
 
 /* Empty states */
@@ -280,8 +291,8 @@
   align-items: flex-start;
   gap: 6px;
   padding: 24px 12px;
-  border: 1px dashed var(--pr-border);
-  border-radius: 12px;
+  border: 1px dashed var(--sb-border);
+  border-radius: var(--sb-radius);
   text-align: left;
 }
 
@@ -292,14 +303,14 @@
 
 .pr-empty-sub {
   font-size: 12px;
-  color: var(--pr-muted);
+  color: var(--sb-muted);
 }
 
 .pr-clear-filter {
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  color: var(--pr-stale-text);
+  color: var(--pr-accent);
   background: none;
   border: none;
   padding: 0;
@@ -315,14 +326,14 @@
   gap: 4px 12px;
   padding: 0 2px;
   font-size: 11px;
-  color: var(--pr-muted);
+  color: var(--sb-muted);
 }
 
 /* Skeleton */
 
 .pr-skeleton-label {
   font-size: 12px;
-  color: var(--pr-muted);
+  color: var(--sb-muted);
   margin-bottom: 2px;
 }
 
@@ -330,8 +341,8 @@
   height: 12px;
   width: 100%;
   border-radius: 5px;
-  background: var(--pr-skeleton);
-  animation: pr-pulse 1.4s ease-in-out infinite;
+  background: var(--sb-skeleton);
+  animation: sb-pulse 1.4s ease-in-out infinite;
 }
 
 .pr-skeleton-chips {
@@ -344,8 +355,8 @@
   width: 72px;
   height: 24px;
   border-radius: 999px;
-  background: var(--pr-skeleton);
-  animation: pr-pulse 1.4s ease-in-out infinite;
+  background: var(--sb-skeleton);
+  animation: sb-pulse 1.4s ease-in-out infinite;
 }
 
 .pr-skeleton-rows {
@@ -357,17 +368,7 @@
 
 .pr-skeleton-row {
   height: 58px;
-  border-radius: 12px;
-  background: var(--pr-skeleton);
-  animation: pr-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes pr-pulse {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
+  border-radius: var(--sb-radius);
+  background: var(--sb-skeleton);
+  animation: sb-pulse 1.4s ease-in-out infinite;
 }
