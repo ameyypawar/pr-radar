@@ -21,6 +21,12 @@ are notes, not a script — say them in your own words, don't read them.
       curl -s -o /dev/null -w '%{http_code}\n' https://cyan-schools-roll-396.alpic.dev/.well-known/oauth-protected-resource/mcp
       # expect 200
       ```
+- [ ] **Re-verify the GitHub total** under `is:open is:pr author:@me archived:false` still reads 77
+      immediately before recording — a newly archived tracked repo changes the number the opening
+      shot puts on screen.
+- [ ] **Run `/prs` and confirm the view footer reads "token via GitHub connection."** Anything else —
+      "token via local .env", or no footer at all — means the broker isn't carrying the call and the
+      auth story on camera isn't the one being narrated. **Do not record.**
 - [ ] **Close the DevTools panel and the model-context sidebar.** The view is the thing being
       demoed; nothing else should compete with it for screen space.
 
@@ -28,7 +34,7 @@ are notes, not a script — say them in your own words, don't read them.
 
 | Time | What's on screen | What you say |
 |---|---|---|
-| 0:00–0:15 | GitHub PR list, filtered to `is:open is:pr author:<login>` — 77 results | "Seventy-seven open pull requests across twenty-two public repositories." |
+| 0:00–0:15 | GitHub PR list, filtered to `is:open is:pr author:@me archived:false` — 77 results | "Seventy-seven open pull requests across twenty-two public repositories." |
 | 0:15–0:30 | Scroll the list once, slowly, then stop | "The question is never *what are my PRs*. It's *which ones are blocked on me right now*, and nothing here answers that." |
 | 0:30–0:50 | Terminal. `curl -si -X POST https://cyan-schools-roll-396.alpic.dev/mcp` | "Before any of that — the server is gated. An unauthenticated call to `/mcp` gets a 401 before a single tool handler runs." |
 | 0:50–1:15 | Highlight the `WWW-Authenticate` header, specifically `resource_metadata=...` | "The 401 carries the address of the protected-resource metadata, RFC 9728. The server publishes where to get a token — nothing is hardcoded in the client." |
@@ -38,10 +44,10 @@ are notes, not a script — say them in your own words, don't read them.
 | 2:30–2:50 | Run `pr-radar`. Main view renders: four bucket chips with counts | "Here's the actual product. Every open PR, bucketed by who has to act next — blocked on you, waiting on a maintainer, stale, draft." |
 | 2:50–3:10 | Scroll two or three PR rows — CI dot, review state, age | "Each row carries CI state, review state, and how long it's been sitting. Blocked-on-you means changes requested or failing or errored CI." |
 | 3:10–3:30 | Click the **Blocked on you** chip, then the **Stale** chip | "Filtering happens in the view. No second round trip to the model." |
-| 3:30–3:50 | AuthPlane audit log, tailing. Show `broker_grant.created provider=github` | "Now the part that matters. This is the authorization server's audit log." |
+| 3:30–3:50 | AuthPlane audit log, tailing (window wide enough to reach today's setup). Point at `broker_grant.created provider=github` | "Now the part that matters. This is the authorization server's audit log — that connect grant up top ran during setup, still sitting in the trail." |
 | 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "The GitHub refresh grant is encrypted inside AuthPlane and never reaches this server. It presents its own audience-bound token, and AuthPlane exchanges that for a short-lived GitHub token — RFC 8693 — once per call." |
-| 4:15–4:30 | Point at the `aes_master` line in the boot-time feature table | "The GitHub refresh grant is encrypted at rest under `aes_master` and never leaves the authorization server." |
-| 4:30–4:45 | Scroll back to `scopes=public_repo` in the audit line | "Note the scope: `public_repo`, not `repo`. Every PR being tracked is public, so the private surface was never needed and was never requested. It's still the narrowest scope this broker can hand back for a read." |
+| 4:15–4:30 | Terminal. `curl -s localhost:9001/admin/system/config -H "Authorization: Bearer $AUTHPLANE_ADMIN_API_KEY" \| jq .encryption` → `{"driver":"aes_master"}` | "The GitHub refresh grant is encrypted at rest under `aes_master`, straight from the server's own config — and it never leaves the authorization server." |
+| 4:30–4:45 | Scroll back to `scopes=public_repo` in the audit line | "Note the scope: `public_repo`, not `repo`. Every PR being tracked is public, so the private surface was never requested. `public_repo` is the narrowest scope declared on this broker resource — narrowing it further is a change on the authorization server, not in this code." |
 | 4:45–5:00 | Run `nudge-pr` on a stale PR. Client stops on the approval prompt — approve it, hold on the dry-run response | "This tool declares `readOnlyHint: false` — write-capable — and carries its own scope, `radar:nudge`. The client stops for approval regardless. The post itself is still a dry run." |
 
 Approve on camera and hold on the dry-run response — that line is the honest payoff, not the approval prompt itself. No outro after it.
