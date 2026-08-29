@@ -1,5 +1,5 @@
 server:
-  issuer: "${AUTHPLANE_ISSUER}"
+  issuer: "https://luis-ridge-bridal-jewellery.trycloudflare.com"
   address: ":9000"
   allowed_origins:
     - "https://cyan-schools-roll-396.alpic.dev"
@@ -48,7 +48,7 @@ data_encryption:
 
 connect:
   state_secret: "${AUTHPLANE_CONNECT_STATE_SECRET}"
-  redirect_base_url: "${AUTHPLANE_REDIRECT_BASE_URL}"
+  redirect_base_url: "https://luis-ridge-bridal-jewellery.trycloudflare.com"
   allowed_return_urls:
     - "https://cyan-schools-roll-396.alpic.dev"
     - "https://cyan-schools-roll-396.alpic.dev/mcp"
