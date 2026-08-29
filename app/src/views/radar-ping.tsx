@@ -1,5 +1,5 @@
 import { useToolInfo } from "../helpers.js";
-import { ErrorBoundary } from "./error-boundary.js";
+import { ErrorBoundary } from "../components/error-boundary.js";
 import "./radar-ping.css";
 
 function initials(label: string): string {

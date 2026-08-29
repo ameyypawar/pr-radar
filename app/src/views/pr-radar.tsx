@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useToolInfo } from "../helpers.js";
 import type { Bucket, PullRequestSummary } from "../triage.js";
-import { ErrorBoundary } from "./error-boundary.js";
+import { ErrorBoundary } from "../components/error-boundary.js";
 import "./pr-radar.css";
 
 interface BucketCounts {
