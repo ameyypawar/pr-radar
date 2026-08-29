@@ -41,7 +41,7 @@ are notes, not a script — say them in your own words, don't read them.
 | 3:30–3:50 | AuthPlane audit log, tailing. Show `broker_grant.created provider=github` | "Now the part that matters. This is the authorization server's audit log." |
 | 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "The GitHub refresh grant is encrypted inside AuthPlane and never reaches this server. It presents its own audience-bound token, and AuthPlane exchanges that for a short-lived GitHub token — RFC 8693 — once per call." |
 | 4:15–4:30 | Point at the `aes_master` line in the boot-time feature table | "The GitHub refresh grant is encrypted at rest under `aes_master` and never leaves the authorization server." |
-| 4:30–4:45 | Scroll back to `scopes=public_repo` in the audit line | "Note the scope: `public_repo`, not `repo`. Every PR being tracked is public, so the private surface was never needed and was never requested." |
+| 4:30–4:45 | Scroll back to `scopes=public_repo` in the audit line | "Note the scope: `public_repo`, not `repo`. Every PR being tracked is public, so the private surface was never needed and was never requested. It's still the narrowest scope this broker can hand back for a read." |
 | 4:45–5:00 | Run `nudge-pr` on a stale PR. Client stops on the approval prompt — approve it, hold on the dry-run response | "This tool declares `readOnlyHint: false` — write-capable — and carries its own scope, `radar:nudge`. The client stops for approval regardless. The post itself is still a dry run." |
 
 Approve on camera and hold on the dry-run response — that line is the honest payoff, not the approval prompt itself. No outro after it.
@@ -87,4 +87,4 @@ pull`. The one step nothing prompts you to create is the fronting link between a
 a Broker resource — registering the broker and completing the connect flow both succeed and both
 look like the end of setup. Error codes like `fronting_link_missing` are precise and exactly
 documented, but they surface only in the authorization server's audit log, not to the client. Full
-log of 13 findings is in `notes/friction-log.md` in the repo.
+log is in `notes/friction-log.md` in the repo.

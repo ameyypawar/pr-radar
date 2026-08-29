@@ -180,6 +180,57 @@ smoothest part of the whole stack.
     admin API instead, which has no such ambiguity — worth documenting the JSON form as the
     default for colon-bearing scopes.
 
+14. **A fronting link cannot express an unscoped exchange, so a read-only consumer is
+    forced to over-privilege.** `pr-radar`'s read path reads public pull request metadata
+    through GitHub's GraphQL API, which requires no scope at all. The minimal correct ask
+    for that exchange is nothing — no upstream scope.
+
+    That isn't expressible. A dry-run call with an empty target list:
+
+    ```
+    POST /admin/fronting
+    {"source":"pr-radar-live","target":"github","scope_map":{"radar:read":[]}}
+    -> 400
+    scope_map entry radar:read must list at least one target scope
+    ```
+
+    Every mapped mint scope must map to at least one upstream scope — there's no way to
+    say "exchange for a token with no upstream scopes." The fallback — map `radar:read` to
+    a non-write GitHub scope like `read:user` instead of `public_repo` — is also closed:
+
+    ```
+    POST /admin/fronting
+    {"source":"pr-radar-live","target":"github","scope_map":{"radar:read":["read:user"]}}
+    -> 400
+    scope_map value "read:user" (under key "radar:read") is not a scope on target resource "github"
+    ```
+
+    The first response is the substantive constraint. The second compounds it: even a
+    narrower, non-write value has to already be declared on the target resource, and
+    `github` was narrowed to `public_repo` only, earlier in the same session (finding 13)
+    — so there was no non-write value left to try. The achievable floor for a read-only
+    consumer, given this resource, is `public_repo`: read *and* write to public
+    repositories, for a query that needs neither.
+
+    **Why it matters.** The narrowest thing a read-only consumer can be granted is bounded
+    by whatever the broker resource declares, not by what the consumer actually needs. If
+    the only scope declared on a resource is write-capable, every read consumer inherits
+    write capability it will never use, no matter how tightly its own mint-side scope is
+    defined. That's backwards for what a token broker is for — brokering exists precisely
+    so the downstream token carries less than the upstream grant, not the same privilege
+    under a different name.
+
+    Suggested fixes, as options rather than a single ask: (a) allow an empty target list in
+    `scope_map`, meaning "exchange for a token with no upstream scopes"; (b) if that's
+    unsafe as a default, gate it behind an explicit opt-in on the target resource; (c) at
+    minimum, document that the achievable floor for any consumer is the narrowest scope
+    already declared on the broker resource, so an operator wiring up a read-only consumer
+    knows to declare a deliberately harmless one.
+
+    We kept `public_repo` on the `github` resource rather than restructure it
+    mid-challenge, so `pr-radar`'s read exchange requests more than it needs. Worth saying
+    plainly: this is a gap we left open, not one we solved.
+
 ## Things that were notably good
 
 - **The boot-time feature self-check.** authserver prints a table of every subsystem
