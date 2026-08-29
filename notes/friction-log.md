@@ -302,6 +302,162 @@ smoothest part of the whole stack.
     tolerates both — but if it doesn't, the copy-paste path fails on a page that is otherwise
     the best end-to-end description of this topology in the docs.
 
+16. **`skybridge dev` doesn't load `.env`, and neither the blank template nor the failure
+    mode gives you a reason to expect that.** `skybridge dev` had been serving for hours;
+    killed and restarted, it never bound its port again, with no error at the top level —
+    the process tree showed only a running typechecker, which read as a hang.
+
+    Traced against the installed `node_modules/skybridge/dist`: `dist/commands/dev.js:64-68`
+    builds the child process's environment as the inherited shell environment plus two
+    internal port values (`{...process.env, __PORT: String(port), __TUNNEL_CONTROL_PORT:
+    String(controlPort)}`) — no dotenv, no `--env-file`, no `loadEnv`, anywhere in the
+    installed package (grepped the whole `dist/` tree; no hits). With no `nodemon.json` in
+    the project, `dist/cli/use-nodemon.js` falls back to `{ watch: ["src"], ext:
+    "ts,json,md", exec: "tsx src/server.ts" }`, run with that same environment. Our
+    `src/env.ts` calls `required()` synchronously while building the exported `env` object,
+    so a missing variable throws the moment the module loads — the child died within
+    milliseconds. Nodemon's own default on a crashed child is to log `'app crashed'` and
+    then, per `lib/monitor/run.js:266`, `"waiting for file changes before starting..."` — it
+    does not retry — which is why nothing but the separately-started `tsc --noEmit --watch`
+    process was left running.
+
+    The framework's contract is that the app loads its own environment, and every auth
+    example in the repo says so the same way — `workos`, `auth0`, `clerk`, `stytch`,
+    `descope-mixed`, and `authplane` itself, the closest analog to what we built — each
+    opens `src/env.ts` with `import "dotenv/config";`. The blank template we actually
+    scaffolded from ships no `src/env.ts` at all, so there was nothing there to carry the
+    line, and its `src/server.ts` doesn't touch it either. We wrote our own `env.ts` from
+    scratch and never read the auth examples closely enough to notice the line every one of
+    them shares. The variables happened to already be exported in the shell we were working
+    in, so the gap ran invisibly for hours.
+
+    Part of what happened next is still ours. The error wasn't discarded: `dev.js`'s
+    interactive UI has a `Logs:` panel that renders nodemon's stderr in a box the moment a
+    message arrives, so the crash trace was on screen the whole time, had we been watching
+    that terminal. What actually sent us looking elsewhere was our own setup — we'd started
+    `skybridge dev` in the background with its output redirected to
+    `/tmp/skybridge-dev.log`, which is not something skybridge does on its own (grepping
+    the whole `dist/` tree turns up no log-file writes of any kind for the dev command;
+    `telemetry.js` writes a separate, unrelated config-style file). The trace was sitting in
+    our own log file the whole time; we didn't think to check it before assuming the server
+    had hung.
+
+    One flag would have surfaced it regardless: `--plain`, a real `dev.js` flag
+    (`Flags.boolean`, "Disable the interactive UI and stream raw server logs to stdout")
+    that shows up in `skybridge dev --help` since oclif builds its help text straight from
+    that description. We searched the docs corpus specifically for it and found nothing —
+    no reference page mentions `--plain` outside the CLI's own `--help` output.
+
+    Suggested fixes, as options: an `import "dotenv/config";` line in the blank template,
+    matching every auth example; a startup check that names the missing variable at the top
+    level rather than leaving it to whatever happens to be watching stderr (ours already
+    does this — see below); or a line in `dev`'s own output, when the child exits non-zero,
+    pointing at `--plain` or the `Logs:` panel.
+
+    Our fix, for completeness: `process.loadEnvFile()` in a try/catch at the top of
+    `app/src/env.ts` — Node 24 ships it natively, so this added no dependency.
+
+17. **Five `${VAR}` placeholders in `infra/config.yaml`, and the two that failed weren't a
+    framework gap so much as names we invented that didn't happen to match — three others
+    did, by accident.** Commit `3ae790d` ("clear template scaffolding and make the config
+    portable") replaced hardcoded tunnel hostnames in `server.issuer` and
+    `connect.redirect_base_url` with `${AUTHPLANE_ISSUER}` and
+    `${AUTHPLANE_REDIRECT_BASE_URL}`, matching the `${...}` form the file already used for
+    its secrets. The container refused to boot:
+
+    ```
+    error: load config: invalid configuration: configuration validation failed:
+      1. connect.redirect_base_url: must be HTTPS (or HTTP for localhost), got "${AUTHPLANE_REDIRECT_BASE_URL}"
+    ```
+
+    Cross-referencing `docs/reference/env-vars.md` (auto-generated from
+    `internal/config/loader.go` — we read the generated table, not the Go source itself)
+    settles the mechanism: AuthPlane does not interpolate `${...}` inside YAML. What it has
+    instead is a fixed, per-key `AUTHPLANE_*` environment variable, evaluated *after* the
+    YAML is parsed, that overrides the matching key outright, independent of whatever text
+    sits there — "Env vars are evaluated after the YAML file is loaded and override matching
+    YAML keys." Neither that page nor `docs/guides/deploy/configuration.md`'s three-layer
+    precedence (defaults → YAML → environment) names an interpolation step. That's an
+    absence in what we could find, not a documented denial — we're reporting silence, not a
+    finding, on whether it exists.
+
+    Of our five placeholders, three named a real override byte-for-byte and two didn't:
+
+    - `admin.api_key: ${AUTHPLANE_ADMIN_API_KEY}` — matches `AUTHPLANE_ADMIN_API_KEY`
+      (`loader.go:354`).
+    - `session.secret: ${AUTHPLANE_SESSION_SECRET}` — matches `AUTHPLANE_SESSION_SECRET`
+      (`loader.go:338`).
+    - `connect.state_secret: ${AUTHPLANE_CONNECT_STATE_SECRET}` — matches
+      `AUTHPLANE_CONNECT_STATE_SECRET` (`loader.go:447`).
+    - `server.issuer: ${AUTHPLANE_ISSUER}` — the real override is `AUTHPLANE_SERVER_ISSUER`
+      (`loader.go:282`); `AUTHPLANE_ISSUER` appears nowhere in the table.
+    - `connect.redirect_base_url: ${AUTHPLANE_REDIRECT_BASE_URL}` — the real override is
+      `AUTHPLANE_CONNECT_REDIRECT_BASE_URL` (`loader.go:448`); what we wrote appears nowhere
+      in the table either.
+
+    `AUTHPLANE_ISSUER` is a real AuthPlane-ecosystem variable, just not this one's — it's
+    what the resource-server SDK reads to discover the AS's metadata, not anything the
+    authserver's own loader looks for. Our own `app/src/env.ts` defines it for exactly that
+    purpose, on the Node side. Two processes, two config surfaces, one name — easy to carry
+    across out of habit, which is what we did.
+
+    Only `admin.api_key` gives us a controlled differential: the real key against the admin
+    API returns `200`; the literal string `${AUTHPLANE_ADMIN_API_KEY}` returns `401`.
+    `session.secret` and `connect.state_secret` don't get that test for free — both are
+    consumed as opaque HMAC key material with no equality check against a known value, so a
+    long-enough literal placeholder would function indistinguishably from a real one.
+    `${AUTHPLANE_CONNECT_STATE_SECRET}` is 33 characters, over the 32-character minimum
+    `docs/guides/deploy/configuration.md` documents for that field. The deployment working
+    proves those two fields held something validly-shaped; it doesn't prove the override
+    fired rather than the placeholder text itself passing. We'd assumed all three worked the
+    same way going in — only one of the three is actually provable.
+
+    Worth citing on its own: AuthPlane's docs contain a sharper version of the same trap.
+    `docs/start/02-quickstart-docker.md` writes `api_key: "${AUTHPLANE_ADMIN_API_KEY}"`
+    inside a `cat > config.yaml << EOF` block whose delimiter is unquoted — the line
+    directly above exports the real key into the shell first, so bash expands
+    `${AUTHPLANE_ADMIN_API_KEY}` at file-creation time and the real value is what actually
+    lands on disk; AuthPlane's loader never sees a placeholder there.
+    `examples/_shared/config.example.yaml`, a file that's checked in rather than
+    shell-generated, carries the visually identical line — `api_key:
+    ${AUTHPLANE_ADMIN_API_KEY}` — with no shell ever running to expand it, and no comment
+    explaining that this line only means anything if the matching env var is also set. Its
+    neighbor field does better: the `issuer` line a few rows up is a plain literal value
+    with a comment above it stating that `AUTHPLANE_SERVER_ISSUER` overrides it. Nothing in
+    the file itself distinguishes the two lines' very different behavior.
+
+    What's left after our own mistakes are subtracted is narrower than we first thought, but
+    real: `server.issuer` accepted the literal string `${AUTHPLANE_ISSUER}` and, we
+    observed, published it verbatim as `issuer` in
+    `/.well-known/oauth-authorization-server`. Calling `server.issuer` unvalidated would
+    overstate it, though: `session.secret` and `admin.api_key`'s own required-when rules key
+    directly off whether `server.issuer` is localhost, so its value is plainly inspected
+    somewhere. What's specifically absent is a *format* check — the shape of check
+    `connect.redirect_base_url` already has, which is exactly how that field caught our
+    identical mistake at boot instead of shipping it. RFC 8414 §2 requires the issuer to be
+    "a URL that uses the https scheme and has no query or fragment components"; a shell
+    placeholder is neither, and no client can use it as one. This cost real time in a way
+    the validated field didn't — the server came up healthy and served metadata, so nothing
+    looked wrong until it failed later, downstream, at a client, as an opaque OAuth
+    discovery failure with no hint that `config.yaml` was the cause. We have not read
+    `internal/config/loader.go` or `internal/config/validate.go` directly, so we can't say
+    why one field validates its shape and the other doesn't — only that the two behave
+    differently while the generated docs show them as the same kind of field (plain string,
+    env-overridable, neither strictly required).
+
+    We left both fields hardcoded to literal tunnel hostnames in the working tree rather
+    than pass the correctly-named overrides in, so the portability commit's actual goal is
+    currently uncommitted and unmet; `connect.state_secret` still carries its original
+    `${AUTHPLANE_CONNECT_STATE_SECRET}`, untouched because it never errored. Worth saying
+    plainly: this is a gap we left open, not one we solved.
+
+    Suggested fixes, as options: validate `server.issuer`'s format at startup the way
+    `connect.redirect_base_url` already is; add to `examples/_shared/config.example.yaml`'s
+    `api_key` line the same kind of comment its `issuer` line already has; or, more
+    generally, a line in the config reference stating that `${...}` in YAML is never
+    expanded by AuthPlane and only takes effect when the exact documented override name is
+    also set as a real environment variable.
+
 ## Things that were notably good
 
 - **The boot-time feature self-check.** authserver prints a table of the subsystems it tracks —
