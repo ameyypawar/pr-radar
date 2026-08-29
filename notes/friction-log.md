@@ -96,6 +96,38 @@ smoothest part of the whole stack.
     set correctly and `/oauth/authorize` immediately starts working. Landing on a simple "you're
     signed in, you can close this tab" page would remove a genuinely confusing dead end.
 
+12. **Protected-resource metadata advertises scopes the resource will reject.** AuthPlane's
+    `/.well-known/oauth-authorization-server` returns `scopes_supported` as the global union
+    across every registered resource — with an MCP server and a GitHub broker both registered,
+    the observed value was `["repo","read:user","radar:read","radar:nudge"]`. Skybridge's
+    `authplaneProvider` (via `customProvider`) defaults the RFC 9728 protected-resource-metadata
+    `scopes_supported` to that AS-level list — `const scopesSupported = opts.scopes ??
+    base.scopes_supported` in `node_modules/skybridge/dist/server/auth/providers/custom.js:31` —
+    so this MCP server advertised `repo` and `read:user`, scopes that belong to a different
+    resource entirely. RFC 9728 §2 defines PRM `scopes_supported` as the scopes used in
+    authorization requests *to access this protected resource*, so the list needs to be
+    resource-scoped, not AS-global.
+
+    A client that requested exactly what the metadata advertised was rejected. Differential test
+    against the same session and client:
+
+    - `scope=radar:read radar:nudge` → `303` to the login page (normal)
+    - `scope=repo read:user radar:read radar:nudge` → `303` to the redirect URI with
+      `error=invalid_scope&error_description=the requested scope is invalid or not allowed: scope
+      "repo" not allowed for resource "https://<app>/mcp"`
+
+    Worth stating explicitly: the `invalid_scope` rejection happens *before* the authentication
+    check, so it surfaces to the end user as a generic "Authorization failed" with an opaque
+    reference id. Signing in again never clears it, which sends debugging down the wrong path —
+    we lost real time here, repeatedly re-testing login.
+
+    Workaround: pass `scopes` explicitly to `authplaneProvider`
+    (`scopes: ["radar:read","radar:nudge"]`) — a typed, documented option, just not the default.
+    Suggested fixes: (a) AuthPlane exposes per-resource scopes so the provider can scope the PRM
+    automatically; (b) `authplaneProvider` derives PRM scopes from the registered resource rather
+    than AS metadata; (c) at minimum, surface `error_description` to the end user, since the AS
+    produces a precise, actionable message that the client currently swallows.
+
 ## Things that were notably good
 
 - **The boot-time feature self-check.** authserver prints a table of every subsystem
@@ -104,5 +136,8 @@ smoothest part of the whole stack.
   we had to ask.
 - **Dynamic Client Registration just worked** — one unauthenticated POST to `/oauth/register`
   returned a usable `client_id` for a Claude callback URL, no dashboard round-trip.
-- **`scopes_supported` in the protected-resource metadata is populated from the resource
-  registered in AuthPlane**, so the MCP server advertises the right scopes without restating them.
+- **Protected-resource and AS discovery metadata are served automatically, no
+  hand-authoring needed** — both endpoints come up correctly out of the box, and
+  `resource`/audience binding is correct by default. One gap: PRM `scopes_supported` is the
+  AS's global union across every registered resource, not scoped to this one (see #12) —
+  invisible until a second resource exists.
