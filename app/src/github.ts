@@ -81,11 +81,6 @@ interface GraphQlResponse {
   errors?: GraphQlErrorPayload[];
 }
 
-/** True when `value` is a string `Date` can actually parse — not merely `typeof value === "string"`. */
-function isParsableDateString(value: unknown): value is string {
-  return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
-}
-
 /**
  * Fetches every open PR authored by the holder of `token`, using `token` as
  * the GitHub bearer credential. `author:@me` resolves against that token, so
@@ -126,15 +121,12 @@ export async function fetchOpenPullRequests(token: string): Promise<FetchOpenPul
     throw new Error("GitHub GraphQL response was missing `data.search` — unexpected response shape.");
   }
 
+  // Structural checks only — number/url must be present and well-typed. createdAt/updatedAt
+  // are deliberately NOT validated here: an unparseable date is triage()'s problem to absorb
+  // (STALE bucket, null day count, "last update unknown" — see triage.ts), not a reason to drop
+  // the PR from the radar. Dropping it would hide it entirely, which reads as good news. See #27.
   const prs = (search.nodes ?? []).filter((node): node is RawPullRequest => {
-    if (!node || typeof node.number !== "number" || typeof node.url !== "string") {
-      return false;
-    }
-    if (!isParsableDateString(node.updatedAt) || !isParsableDateString(node.createdAt)) {
-      console.warn(`pr-radar: dropping PR #${node.number} — updatedAt/createdAt did not parse as a date.`);
-      return false;
-    }
-    return true;
+    return node !== null && typeof node.number === "number" && typeof node.url === "string";
   });
 
   const login = json.data?.viewer?.login;

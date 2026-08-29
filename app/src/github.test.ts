@@ -80,9 +80,25 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-test("a malformed node sets truncated even below the page cap", async () => {
+test("issueCount above the returned node count sets truncated (page cap)", async () => {
+  // No malformed nodes here — this is the actual page-cap case (search matched more than the
+  // 100 nodes GraphQL returned). issueCount alone drives truncated.
+  globalThis.fetch = async () =>
+    jsonResponse(buildResponseBody({ issueCount: 2, nodes: [goodNode({ number: 101 })] }));
+
+  const result = await fetchOpenPullRequests("token");
+
+  assert.equal(result.issueCount, 2);
+  assert.equal(result.prs.length, 1);
+  assert.equal(result.truncated, true);
+});
+
+test("a node missing a required structural field is dropped and sets truncated", async () => {
   const wellFormed = goodNode({ number: 101 });
-  const malformed = goodNode({ number: 102, updatedAt: "not-a-real-date" });
+  // number/url are the only fields fetchOpenPullRequests still checks (see #27) — drop number to
+  // exercise that check, independent of the page cap. `undefined` here is dropped by
+  // JSON.stringify in jsonResponse() below, so it round-trips identically to an omitted key.
+  const malformed: Partial<RawPullRequest> = { ...goodNode({ number: 102 }), number: undefined };
 
   globalThis.fetch = async () =>
     jsonResponse(buildResponseBody({ issueCount: 2, nodes: [wellFormed, malformed] }));
@@ -93,6 +109,22 @@ test("a malformed node sets truncated even below the page cap", async () => {
   assert.equal(result.prs.length, 1);
   assert.equal(result.prs[0].number, 101);
   assert.equal(result.truncated, true);
+});
+
+test("a node with an unparseable updatedAt is retained, not dropped (issue #27)", async () => {
+  const wellFormed = goodNode({ number: 101 });
+  const badDate = goodNode({ number: 102, updatedAt: "not-a-real-date" });
+
+  globalThis.fetch = async () =>
+    jsonResponse(buildResponseBody({ issueCount: 2, nodes: [wellFormed, badDate] }));
+
+  const result = await fetchOpenPullRequests("token");
+
+  assert.equal(result.issueCount, 2);
+  assert.equal(result.prs.length, 2);
+  assert.equal(result.prs[1].number, 102);
+  assert.equal(result.prs[1].updatedAt, "not-a-real-date");
+  assert.equal(result.truncated, false);
 });
 
 test("a non-empty errors array throws with the joined messages", async () => {

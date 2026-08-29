@@ -142,15 +142,11 @@ describe("triage() — null-safety fallbacks", () => {
   }
 });
 
-describe("triage() — unparseable updatedAt (dead path, see issue #27)", () => {
-  // fetchOpenPullRequests() filters out unparseable updatedAt/createdAt
-  // before triage() ever sees the node (app/src/github.ts,
-  // isParsableDateString), so this branch is unreachable in production
-  // today. triage() itself still implements the handling. Skipped rather
-  // than asserted-passing: a green test here would claim production
-  // coverage that does not exist. Unskip once issue #27 either removes
-  // the pre-filter or confirms this path is meant to stay reachable.
-  it.skip("unparseable updatedAt buckets as STALE with staleDays: null", () => {
+describe("triage() — unparseable updatedAt", () => {
+  // fetchOpenPullRequests() no longer filters on date parsability (issue #27) — it only checks
+  // that number/url are well-typed. A PR with an unparseable updatedAt now reaches triage()
+  // exactly like this fixture does, so this path is reachable in production.
+  it("unparseable updatedAt buckets as STALE with staleDays: null", () => {
     const summary = triage(makeRawPR({ updatedAt: "not-a-date" }), NOW);
     assert.equal(summary.staleDays, null);
     assert.equal(summary.bucket, "STALE");
