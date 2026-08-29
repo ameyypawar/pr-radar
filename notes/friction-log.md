@@ -128,6 +128,58 @@ smoothest part of the whole stack.
     than AS metadata; (c) at minimum, surface `error_description` to the end user, since the AS
     produces a precise, actionable message that the client currently swallows.
 
+13. **A Mint→Broker token exchange needs a fronting link that nothing prompts you to
+    create.** Setup was, we thought, complete: a Mint resource (`pr-radar-live`) for the MCP
+    server, a Broker resource (`github`) pointing at a GitHub broker provider, the Broker's
+    `policy.exchange.allowed_client_ids` naming our confidential client, and a completed user
+    connect flow that produced a real `broker_grant` (audit: `broker_grant.created
+    provider=github version=1`, refresh token encrypted under `aes_master`). Every RFC 8693
+    exchange still failed:
+
+    ```
+    POST /oauth/token -> 400
+    audit: token.exchange_denied  reason=fronting_link_missing
+    ```
+
+    The missing piece is a `fronting_links` row declaring that the Mint may exchange for the
+    Broker. It's admin-API-only — there is no YAML config block for it, so an operator who
+    configures everything else through `config.yaml` has no reason to know it exists. Fixed
+    with a single admin call:
+
+    ```
+    POST /admin/fronting
+    {"source":"pr-radar-live","target":"github","scope_map":{"radar:read":["public_repo","read:user"],"radar:nudge":["public_repo"]}}
+    -> 201
+    ```
+
+    Three things stood out, in order of how useful they'd be to AuthPlane — two of which are
+    on us, not them:
+
+    - **On us: two steps that succeeded and looked terminal, so we stopped there.**
+      Registering the Broker resource and completing the connect flow both succeed, and both
+      look like the end of setup — you finish with a stored grant and reasonably conclude
+      you're done. We did, and we were wrong. A hint at Broker-resource creation time — e.g.
+      flagging that no fronting link references this resource yet — or a
+      `GET /admin/resources/<slug>` field listing inbound links, would have closed the gap
+      before we ever hit the `400`.
+    - **Credit due: `reason=fronting_link_missing` is a genuinely excellent error code.**
+      `docs/topologies/mcp-gateway-broker.md` documents it with the exact fix, and once we had
+      the reason string, resolution took minutes. The only gap is that the reason lives solely
+      in the authorization server's own audit log — the client we were testing from saw
+      nothing but a bare `400`.
+    - **On us: a fallback we built ourselves hid the bug from us.** The tool degrades to a
+      static token when the broker is unavailable, and that fallback silently masked this
+      misconfiguration — it returned correct-looking data from the fallback path, so nothing
+      looked wrong until we went and read the AS audit log directly. Lesson for anyone wiring
+      a broker: log the token source explicitly and assert on it in testing, or a working
+      fallback will hide a broken exchange.
+
+    One more small thing: the CLI's `--scope-map` flag separates source scope from target
+    scopes with `:` (`--scope-map A:AA,B:BB`), which is ambiguous when the scopes themselves
+    contain colons, as OAuth scopes commonly do (`radar:read`, `read:user`). We used the JSON
+    admin API instead, which has no such ambiguity — worth documenting the JSON form as the
+    default for colon-bearing scopes.
+
 ## Things that were notably good
 
 - **The boot-time feature self-check.** authserver prints a table of every subsystem
