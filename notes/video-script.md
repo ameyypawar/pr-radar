@@ -24,11 +24,40 @@ are notes, not a script — say them in your own words, don't read them.
 - [ ] **Re-verify the GitHub total** under `is:open is:pr author:@me archived:false` still reads 77
       immediately before recording — a newly archived tracked repo changes the number the opening
       shot puts on screen.
-- [ ] **Run `/prs` and confirm the view footer reads "token via GitHub connection."** Anything else —
-      "token via local .env", or no footer at all — means the broker isn't carrying the call and the
-      auth story on camera isn't the one being narrated. **Do not record.**
+- [ ] **Run `/prs`, hover the `@<login>` in the header, and confirm the tooltip reads "token via
+      GitHub connection."** There is no footer any more. The token source is a `title` on the
+      account name in the header's second line (`<N> open PRs · @<login>`), so it is revealed by
+      hovering, not by reading — hold the pointer on the handle for a second. Three readings, one
+      of which is go:
+      - **"token via GitHub connection"** — the RFC 8693 broker exchange served this call. **Go.**
+      - **"token via local .env"** — a local PAT served it, not the broker. The chat reply also
+        opens with "These are the server's fallback account's pull requests, not yours."
+        **Do not record.**
+      - **No `@<login>` on that line at all, and a "Connect GitHub" banner above the header** — no
+        GitHub token was obtained. The chat reply says "GitHub isn't connected yet."
+        **Do not record.**
+
+      `GITHUB_TOKEN` and `ALLOW_ENV_TOKEN_FALLBACK` are both absent from `app/.env`, so the middle
+      reading should be unreachable — check anyway. This is the auth story the whole video narrates.
 - [ ] **Close the DevTools panel and the model-context sidebar.** The view is the thing being
       demoed; nothing else should compete with it for screen space.
+- [ ] **Last thing before you hit record — stop the supervisor**, from the repo root:
+      ```
+      ./infra/supervise.sh --stop      # names the pid it stopped
+      ./infra/supervise.sh --status    # expect "not running"
+      ```
+      `infra/supervise.sh` probes `POST localhost:3000/mcp` and the public `/mcp`; on three
+      consecutive misses (six seconds, sometimes more) it kills the whole `skybridge dev` tree — or
+      the `alpic tunnel` tree — and cold-starts it, dropping every live MCP session mid-take. It is
+      an asset between takes and a liability during one. **Also don't touch anything under
+      `app/src/` while recording**: `skybridge dev` watches that directory itself and respawns its
+      server child on any change, supervisor or no supervisor.
+
+      Re-arm it after the last take, from the repo root:
+      ```
+      nohup ./infra/supervise.sh > /dev/null 2>&1 &
+      ./infra/supervise.sh --status    # expect "running (pid ...)"
+      ```
 
 ## Shot list
 
@@ -41,9 +70,9 @@ are notes, not a script — say them in your own words, don't read them.
 | 1:15–1:35 | AuthPlane sign-in page | "That metadata points the client at AuthPlane, which is running self-hosted in Docker." |
 | 1:35–2:00 | Consent screen, two scopes visible: `radar:read`, `radar:nudge` | "Two scopes, and that's the whole ask. The token AuthPlane issues is audience-bound to this one server — RFC 8707 — so it isn't usable anywhere else." |
 | 2:00–2:30 | Run `radar-ping`. Identity card renders — email, scope pills, client id | "That's the signed-in identity as the authorization server sees it. And this is an MCP App view: a React component rendering in the client, not a wall of text." |
-| 2:30–2:50 | Run `pr-radar`. Main view renders: four bucket chips with counts | "Here's the actual product. Every open PR, bucketed by who has to act next — blocked on you, waiting on a maintainer, stale, draft." |
-| 2:50–3:10 | Scroll two or three PR rows — CI dot, review state, age | "Each row carries CI state, review state, and how long it's been sitting. Blocked-on-you means changes requested or failing or errored CI." |
-| 3:10–3:30 | Click the **Blocked on you** chip, then the **Stale** chip | "Filtering happens in the view. No second round trip to the model." |
+| 2:30–2:50 | Run `pr-radar`. The inline view renders: headline count, four chips — Blocked, Stale, Waiting, Draft — and the PRs blocked on you | "Here's the actual product. Every open PR gets bucketed by who has to act next — blocked on you, stale, waiting on a maintainer, draft — and inline it leads with the ones blocked on you." |
+| 2:50–3:10 | Read down the inline rows — CI dot, review state, age. There are at most three and they don't scroll | "Each row carries CI state, review state, and how long it's been sitting. Blocked-on-you means changes requested or failing or errored CI." |
+| 3:10–3:30 | Click **Open full radar**. The board takes the full pane — four bucket columns. Click **By repository**, then **By urgency** again | "The chips are a read-out, not buttons — the board is where you browse. Expanding it and switching layout both happen inside the view. No second round trip to the model." |
 | 3:30–3:50 | AuthPlane audit log, tailing (window wide enough to reach today's setup). Point at `broker_grant.created provider=github` | "Now the part that matters. This is the authorization server's audit log — that connect grant up top ran during setup, still sitting in the trail." |
 | 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "The GitHub refresh grant is encrypted inside AuthPlane and never reaches this server. It presents its own audience-bound token, and AuthPlane exchanges that for a short-lived GitHub token — RFC 8693 — once per call." |
 | 4:15–4:30 | Terminal. `curl -s localhost:9001/admin/system/config -H "Authorization: Bearer $AUTHPLANE_ADMIN_API_KEY" \| jq .encryption` → `{"driver":"aes_master"}` | "The GitHub refresh grant is encrypted at rest under `aes_master`, straight from the server's own config — and it never leaves the authorization server." |
@@ -57,8 +86,13 @@ Approve on camera and hold on the dry-run response — that line is the honest p
 - **Blank or empty view region.** The `tool-result` notification was missed. Hard refresh, warm up
   with one throwaway `/prs`, retake the section. **Do not debug on camera** — it never resolves in
   under a minute and the take is already lost.
-- **Tunnel dropped — `/mcp` returns 404.** A watchdog restarts it. Wait ~20 s, re-run the
-  pre-flight `curl`, then retake. Nothing to fix by hand.
+- **Tunnel dropped — `/mcp` returns 404.** The supervisor fixes this, but it is stopped for the
+  take. Re-arm it (`nohup ./infra/supervise.sh > /dev/null 2>&1 &`), give it up to a minute,
+  re-run the pre-flight `curl` until it reads 401, then stop it again
+  (`./infra/supervise.sh --stop`) before the retake. Nothing to fix by hand.
+- **"Open full radar" does nothing.** Fullscreen is the host's to grant, and the board only draws
+  once it has. Retake the shot; if it fails twice, narrate the same point over the inline view and
+  drop the board — it is one shot, not the demo.
 - **Playground asks you to authorize again.** The AuthPlane session expired. Sign in at
   `/login` first. It lands on a **404 page — that is expected and means it worked**; the session
   cookie is set and `/oauth/authorize` starts working immediately. Then retry the connect flow.
