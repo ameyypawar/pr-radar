@@ -53,6 +53,13 @@ const server = new McpServer(
     description:
       "Verify the signed-in identity for PR Radar. Returns who you are according to the authorization server.",
     inputSchema: {},
+    outputSchema: {
+      subject: z.string().optional(),
+      email: z.string().optional(),
+      scopes: z.array(z.string()),
+      clientId: z.string().optional(),
+      verifiedAt: z.string(),
+    },
     annotations: { readOnlyHint: true, destructiveHint: false },
     auth: { scopes: ["radar:read"] },
     view: { component: "radar-ping", description: "Signed-in identity card" },
@@ -83,6 +90,40 @@ const server = new McpServer(
           .describe(
             "Optional filter: BLOCKED_ON_YOU, STALE, WAITING_ON_MAINTAINER, or DRAFT. Omit to return every open PR.",
           ),
+      },
+      outputSchema: {
+        totalCount: z.number(),
+        counts: z.object({
+          blockedOnYou: z.number(),
+          waitingOnMaintainer: z.number(),
+          stale: z.number(),
+          draft: z.number(),
+        }),
+        prs: z.array(
+          z.object({
+            number: z.number(),
+            title: z.string(),
+            url: z.string(),
+            repo: z.string(),
+            bucket: z.enum(["BLOCKED_ON_YOU", "STALE", "WAITING_ON_MAINTAINER", "DRAFT"]),
+            isDraft: z.boolean(),
+            reviewDecision: z.string().nullable(),
+            ciState: z.string().nullable(),
+            createdAt: z.string(),
+            updatedAt: z.string(),
+            ageDays: z.number(),
+            staleDays: z.number(),
+          }),
+        ),
+        login: z.string(),
+        tokenSource: z.enum(["broker", "env", "none"]),
+        connectPrompt: z
+          .object({
+            needed: z.literal(true),
+            url: z.string(),
+            reason: z.string(),
+          })
+          .optional(),
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
       auth: { scopes: ["radar:read"] },
