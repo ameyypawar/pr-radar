@@ -1,0 +1,15 @@
+query($q: String!) {
+  search(query: $q, type: ISSUE, first: 40) {
+    issueCount
+    nodes {
+      ... on PullRequest {
+        number title url isDraft createdAt updatedAt
+        repository { nameWithOwner }
+        reviewDecision
+        commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+        comments(last: 1) { totalCount nodes { author { login } createdAt } }
+        reviews(last: 1) { totalCount nodes { author { login } state } }
+      }
+    }
+  }
+}
