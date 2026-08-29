@@ -21,3 +21,6 @@ infra/data/
 .vscode/
 .idea/
 infra/urls.env
+
+# claude session exports (contain secrets/passwords) — never commit
+infra/*.txt

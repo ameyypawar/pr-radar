@@ -44,6 +44,10 @@ const server = new McpServer(
     oauth: await authplaneProvider<{ email?: string }>({
       issuer: env.AUTHPLANE_ISSUER,
       resource: env.SERVER_URL,
+      // Pin to this resource's own scopes — AuthPlane's AS-level scopes_supported is a
+      // global union across every registered resource, and without this the PRM (RFC 9728)
+      // leaks other resources' scopes (e.g. the GitHub broker's "repo", "read:user").
+      scopes: ["radar:read", "radar:nudge"],
     }),
   },
 ).registerTool(
