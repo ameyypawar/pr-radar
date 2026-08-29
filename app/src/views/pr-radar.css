@@ -320,12 +320,6 @@
 
 /* Skeleton */
 
-.pr-skeleton-label {
-  font-size: 12px;
-  color: var(--pr-muted);
-  margin-bottom: 2px;
-}
-
 .pr-skeleton-line {
   height: 12px;
   width: 100%;

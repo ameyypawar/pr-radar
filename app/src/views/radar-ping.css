@@ -107,12 +107,6 @@
   color: var(--rp-muted);
 }
 
-.rp-skeleton-label {
-  font-size: 12px;
-  color: var(--rp-muted);
-  margin-bottom: 8px;
-}
-
 .rp-skeleton-avatar {
   flex: none;
   width: 40px;
