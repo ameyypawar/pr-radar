@@ -1,0 +1,29 @@
+{
+  "name": "app",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Blank Skybridge MCP server template",
+  "type": "module",
+  "scripts": {
+    "dev": "skybridge dev",
+    "dev:tunnel": "skybridge dev --tunnel",
+    "build": "skybridge build",
+    "start": "skybridge start",
+    "deploy": "alpic deploy"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "skybridge": "^1.4.1",
+    "vite": "^8.1.5"
+  },
+  "devDependencies": {
+    "@skybridge/devtools": "^1.2.7",
+    "@types/node": "^24.13.3",
+    "alpic": "^1.155.0",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24.18.0"
+  }
+}

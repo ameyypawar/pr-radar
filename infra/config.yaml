@@ -1,0 +1,28 @@
+server:
+  issuer: "http://localhost:9000"
+  address: ":9000"
+
+storage:
+  driver: sqlite
+  sqlite:
+    path: "/data/authserver.db"
+    wal: true
+
+signing:
+  algorithm: ES256
+  key_path: "/data/keys"
+
+dcr:
+  mode: open
+
+admin:
+  enabled: true
+  address: ":9001"
+  api_key: "${AUTHPLANE_ADMIN_API_KEY}"
+
+client_credentials:
+  enabled: true
+token_exchange:
+  enabled: true
+  max_chain_depth: 5
+  token_expiry: 1h

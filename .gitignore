@@ -1,0 +1,22 @@
+# secrets — never commit
+infra/.secrets.env
+**/.env
+.env
+.env.*
+!.env.example
+
+# deps / build
+node_modules/
+dist/
+build/
+.skybridge/
+
+# local data
+infra/data/
+*.db
+*.log
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
