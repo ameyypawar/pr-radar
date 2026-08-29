@@ -13,11 +13,17 @@ interface BucketCounts {
   draft: number;
 }
 
-const CHIPS: Array<{ bucket: Bucket; emoji: string; label: string; countKey: keyof BucketCounts }> = [
-  { bucket: "BLOCKED_ON_YOU", emoji: "🔴", label: "Blocked on you", countKey: "blockedOnYou" },
-  { bucket: "STALE", emoji: "💤", label: "Stale", countKey: "stale" },
-  { bucket: "WAITING_ON_MAINTAINER", emoji: "🟡", label: "Waiting on maintainer", countKey: "waitingOnMaintainer" },
-  { bucket: "DRAFT", emoji: "⚪", label: "Draft", countKey: "draft" },
+const CHIPS: Array<{ bucket: Bucket; dot: string; label: string; short: string; countKey: keyof BucketCounts }> = [
+  { bucket: "BLOCKED_ON_YOU", dot: "pr-dot-red", label: "Blocked on you", short: "Blocked", countKey: "blockedOnYou" },
+  { bucket: "STALE", dot: "pr-dot-indigo", label: "Stale", short: "Stale", countKey: "stale" },
+  {
+    bucket: "WAITING_ON_MAINTAINER",
+    dot: "pr-dot-pending",
+    label: "Waiting on maintainer",
+    short: "Waiting",
+    countKey: "waitingOnMaintainer",
+  },
+  { bucket: "DRAFT", dot: "pr-dot-gray", label: "Draft", short: "Draft", countKey: "draft" },
 ];
 
 const BUCKET_GROUP_CLASS: Record<Bucket, string> = {
@@ -40,6 +46,20 @@ const BUCKET_COUNT_KEY: Record<Bucket, keyof BucketCounts> = {
   STALE: "stale",
   DRAFT: "draft",
 };
+
+// Skybridge inline views must fit the host's available space with no
+// scrolling container (ui-guidelines.md, "Display Modes -> Inline"). Derive
+// how many rows fit from useLayout().maxHeight instead of rendering every
+// row. CHROME_PX/ROW_PX are measured off the current header/chips/row
+// markup; FALLBACK_MAX_HEIGHT covers hosts that report no maxHeight.
+const FALLBACK_MAX_HEIGHT = 640;
+const CHROME_PX = 92; // header + chips + the .pr-root gaps above the list
+const ROW_PX = 81; // .pr-row (~80px) plus its divider border
+const MIN_ROWS = 3;
+
+function computeRowCap(maxHeight: number | undefined): number {
+  return Math.max(MIN_ROWS, Math.floor(((maxHeight ?? FALLBACK_MAX_HEIGHT) - CHROME_PX) / ROW_PX));
+}
 
 function ciMeta(state: string | null): { dot: string; label: string } | null {
   switch (state) {
@@ -126,11 +146,12 @@ function PrRow({ pr }: { pr: PullRequestSummary }) {
 }
 
 function PrRadarSkeleton() {
-  const { theme } = useLayout();
+  const { theme, maxHeight } = useLayout();
+  const rowCap = computeRowCap(maxHeight);
   return (
     <div className={`sb-root pr-root ${themeClass(theme)}`.trim()}>
       <div className="pr-skeleton-label">Loading your PR radar…</div>
-      <div className="pr-skeleton-line" style={{ width: "45%", height: 18 }} />
+      <div className="pr-skeleton-line" style={{ width: "45%", height: 23 }} />
       <div className="pr-skeleton-line" style={{ width: "65%", marginTop: 6 }} />
       <div className="pr-skeleton-chips">
         {[0, 1, 2, 3].map((i) => (
@@ -138,7 +159,7 @@ function PrRadarSkeleton() {
         ))}
       </div>
       <div className="pr-skeleton-rows">
-        {[0, 1, 2, 3, 4].map((i) => (
+        {Array.from({ length: rowCap }, (_, i) => (
           <div key={i} className="pr-skeleton-row" />
         ))}
       </div>
@@ -149,7 +170,8 @@ function PrRadarSkeleton() {
 function PrRadarView() {
   const info = useToolInfo<"pr-radar">();
   const [selectedBucket, setSelectedBucket] = useState<Bucket | null>(null);
-  const { theme } = useLayout();
+  const [expanded, setExpanded] = useState(false);
+  const { theme, maxHeight } = useLayout();
 
   if (!info.isSuccess || !info.output) {
     return <PrRadarSkeleton />;
@@ -157,6 +179,9 @@ function PrRadarView() {
 
   const { totalCount, truncated, counts, prs, login, tokenSource, connectPrompt } = info.output;
   const visiblePrs = selectedBucket ? prs.filter((pr) => pr.bucket === selectedBucket) : prs;
+  const rowCap = computeRowCap(maxHeight);
+  const shownPrs = expanded ? visiblePrs : visiblePrs.slice(0, rowCap);
+  const hiddenCount = visiblePrs.length - shownPrs.length;
   const tokenLabel = tokenSourceLabel(tokenSource);
 
   return (
@@ -176,7 +201,12 @@ function PrRadarView() {
         </div>
         <div className="pr-header-sub">
           {totalCount} open PR{totalCount === 1 ? "" : "s"}
-          {login ? ` · @${login}` : ""}
+          {login ? (
+            <Fragment>
+              {" · "}
+              <span title={tokenLabel ?? undefined}>@{login}</span>
+            </Fragment>
+          ) : null}
         </div>
         {truncated ? (
           <div className="pr-header-sub">
@@ -186,21 +216,21 @@ function PrRadarView() {
       </div>
 
       <div className="pr-chips">
-        {CHIPS.map(({ bucket, emoji, label, countKey }) => {
+        {CHIPS.map(({ bucket, dot, label, short, countKey }) => {
           const active = selectedBucket === bucket;
+          const count = `${counts[countKey]}${truncated ? "+" : ""}`;
           return (
             <button
               key={bucket}
               type="button"
               className={`pr-chip${active ? " pr-chip-active" : ""}`}
               aria-pressed={active}
+              aria-label={`${label} (${count})`}
               onClick={() => setSelectedBucket((current) => (current === bucket ? null : bucket))}
             >
-              <span aria-hidden="true">{emoji}</span> {label}
-              <span className="pr-chip-count">
-                {counts[countKey]}
-                {truncated ? "+" : ""}
-              </span>
+              <span className={`pr-dot ${dot}`} aria-hidden="true" />
+              {short}
+              <span className="pr-chip-count">{count}</span>
             </button>
           );
         })}
@@ -224,21 +254,26 @@ function PrRadarView() {
           </button>
         </div>
       ) : (
-        <div className="pr-list">
-          {visiblePrs.map((pr, i) => (
-            <Fragment key={`${pr.repo}#${pr.number}`}>
-              {!selectedBucket && (i === 0 || visiblePrs[i - 1].bucket !== pr.bucket) ? (
-                <div className={`pr-group ${BUCKET_GROUP_CLASS[pr.bucket]}`}>
-                  {BUCKET_LABEL[pr.bucket]} · {counts[BUCKET_COUNT_KEY[pr.bucket]]}
-                </div>
-              ) : null}
-              <PrRow pr={pr} />
-            </Fragment>
-          ))}
-        </div>
+        <Fragment>
+          <div className="pr-list">
+            {shownPrs.map((pr, i) => (
+              <Fragment key={`${pr.repo}#${pr.number}`}>
+                {!selectedBucket && (i === 0 || shownPrs[i - 1].bucket !== pr.bucket) ? (
+                  <div className={`pr-group ${BUCKET_GROUP_CLASS[pr.bucket]}`}>
+                    {BUCKET_LABEL[pr.bucket]} · {counts[BUCKET_COUNT_KEY[pr.bucket]]}
+                  </div>
+                ) : null}
+                <PrRow pr={pr} />
+              </Fragment>
+            ))}
+          </div>
+          {!expanded && hiddenCount > 0 ? (
+            <button type="button" className="pr-more" onClick={() => setExpanded(true)}>
+              Show {hiddenCount} more
+            </button>
+          ) : null}
+        </Fragment>
       )}
-
-      <div className="pr-meta-footer">{tokenLabel ? <span>{tokenLabel}</span> : null}</div>
     </div>
   );
 }

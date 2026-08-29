@@ -13,6 +13,7 @@
   --pr-dot-green: #22c55e;
   --pr-dot-red: #ef4444;
   --pr-dot-gray: #9ca3af;
+  --pr-dot-indigo: var(--pr-stale-text);
 
   --pr-chip-bg: #f3f4f6;
   --pr-chip-active-bg: #111827;
@@ -126,13 +127,14 @@
   align-items: center;
   gap: 5px;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 1.35;
   color: var(--sb-text);
   background: var(--pr-chip-bg);
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 6px 12px;
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.12s ease;
@@ -192,7 +194,8 @@
 }
 
 .pr-chip:focus-visible,
-.pr-clear-filter:focus-visible {
+.pr-clear-filter:focus-visible,
+.pr-more:focus-visible {
   outline: 2px solid var(--pr-accent);
   outline-offset: 2px;
 }
@@ -310,8 +313,25 @@
   background: var(--pr-dot-gray);
 }
 
+.pr-dot-indigo {
+  background: var(--pr-dot-indigo);
+}
+
 .pr-meta-sep {
   color: var(--sb-border);
+}
+
+.pr-more {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pr-accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 /* Empty states */
@@ -349,17 +369,6 @@
   text-decoration: underline;
 }
 
-/* Footer */
-
-.pr-meta-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 0 2px;
-  font-size: 11px;
-  color: var(--sb-muted);
-}
-
 /* Skeleton */
 
 .pr-skeleton-label {
@@ -384,7 +393,7 @@
 
 .pr-skeleton-chip {
   width: 72px;
-  height: 24px;
+  height: 28px;
   border-radius: 999px;
   background: var(--sb-skeleton);
   animation: sb-pulse 1.4s ease-in-out infinite;
@@ -393,13 +402,20 @@
 .pr-skeleton-rows {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   margin-top: 12px;
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius);
+  overflow: hidden;
 }
 
 .pr-skeleton-row {
-  height: 58px;
-  border-radius: var(--sb-radius);
+  height: 80px;
+  border-radius: 0;
   background: var(--sb-skeleton);
   animation: sb-pulse 1.4s ease-in-out infinite;
+}
+
+.pr-skeleton-row + .pr-skeleton-row {
+  border-top: 1px solid var(--sb-border);
 }
