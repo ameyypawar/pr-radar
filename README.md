@@ -42,23 +42,41 @@ server from a clean clone is two steps: start the container, then run
 **1. Create `infra/.secrets.env`** (gitignored — never commit it) with:
 
 ```
-AUTHPLANE_ADMIN_API_KEY         # bearer token for the :9001 admin API
-AUTHPLANE_SESSION_SECRET        # session cookie signing key
-AUTHPLANE_DATA_ENC_KEY          # hex-encoded; e.g. `openssl rand -hex 32`
-AUTHPLANE_CONNECT_STATE_SECRET  # >=32 chars; e.g. `openssl rand -hex 32`
-AUTHPLANE_ISSUER                # public issuer URL for this server
-AUTHPLANE_REDIRECT_BASE_URL     # base URL for /connect/{provider} callbacks
-AUTHPLANE_APP_URL               # this app's public URL (used as the
-                                 # pr-radar-live resource's base URI)
-CONNECTOR_GITHUB_CLIENT_ID      # your GitHub OAuth App's client id
-CONNECTOR_GITHUB_SECRET         # your GitHub OAuth App's client secret
+AUTHPLANE_ADMIN_API_KEY                # bearer token for the :9001 admin API
+AUTHPLANE_SESSION_SECRET               # session cookie signing key
+AUTHPLANE_DATA_ENC_KEY                 # hex-encoded; e.g. `openssl rand -hex 32`
+AUTHPLANE_CONNECT_STATE_SECRET         # >=32 chars; e.g. `openssl rand -hex 32`
+AUTHPLANE_SERVER_ISSUER                # this server's public issuer URL —
+                                        # authserver's own override for
+                                        # server.issuer (infra/config.yaml)
+AUTHPLANE_SERVER_ALLOWED_ORIGINS       # this app's origin, for CORS
+                                        # (comma-separated if more than one)
+AUTHPLANE_CONNECT_REDIRECT_BASE_URL    # base URL for /connect/{provider}
+                                        # callbacks
+AUTHPLANE_CONNECT_ALLOWED_RETURN_URLS  # this app's origin, plus /mcp,
+                                        # comma-separated
+AUTHPLANE_ISSUER                       # same URL as AUTHPLANE_SERVER_ISSUER
+                                        # above, read separately by this
+                                        # app's own SDK (app/src/env.ts) —
+                                        # different process, same value
+AUTHPLANE_APP_URL                      # this app's public URL (used as the
+                                        # pr-radar-live resource's base URI)
+CONNECTOR_GITHUB_CLIENT_ID             # your GitHub OAuth App's client id
+CONNECTOR_GITHUB_SECRET                # your GitHub OAuth App's client secret
 ```
 
-`AUTHPLANE_ISSUER` / `AUTHPLANE_REDIRECT_BASE_URL` also need to match what's
-hardcoded in `infra/config.yaml`'s `server.issuer` / `connect.redirect_base_url`
-(config.yaml isn't templated from these env vars — they're passed to the
-container as-is, for tooling that reads them directly). Update both places
-together if the issuer changes.
+`AUTHPLANE_SERVER_ISSUER`, `AUTHPLANE_SERVER_ALLOWED_ORIGINS`,
+`AUTHPLANE_CONNECT_REDIRECT_BASE_URL`, and
+`AUTHPLANE_CONNECT_ALLOWED_RETURN_URLS` are authserver's own documented
+overrides for `server.issuer`, `server.allowed_origins`,
+`connect.redirect_base_url`, and `connect.allowed_return_urls` — env vars
+are applied *after* `infra/config.yaml` loads and replace the matching
+key outright, so `infra/config.yaml` deliberately leaves all four unset.
+There is nothing left in that file to keep in sync with these: set your
+hostnames here and only here. (AuthPlane does not expand `${VAR}`-style
+placeholders inside the YAML — an earlier version of this file tried
+that; it silently published a literal `${...}` string as the issuer
+instead of failing loudly. See issues #19 and #63.)
 
 **2. Start the container** (tested against `authplane/authserver:latest`,
 resolving to v0.1.1 at time of writing):
@@ -76,8 +94,10 @@ docker run -d \
   -e AUTHPLANE_DATA_ENC_KEY \
   -e AUTHPLANE_CONNECT_STATE_SECRET \
   -e CONNECTOR_GITHUB_SECRET \
-  -e AUTHPLANE_ISSUER \
-  -e AUTHPLANE_REDIRECT_BASE_URL \
+  -e AUTHPLANE_SERVER_ISSUER \
+  -e AUTHPLANE_SERVER_ALLOWED_ORIGINS \
+  -e AUTHPLANE_CONNECT_REDIRECT_BASE_URL \
+  -e AUTHPLANE_CONNECT_ALLOWED_RETURN_URLS \
   -e AUTHPLANE_APP_URL \
   authplane/authserver:latest serve --config /config.yaml
 ```

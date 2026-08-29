@@ -1,8 +1,15 @@
+# server.issuer and server.allowed_origins are deployment-specific (this
+# project's public URL is a Cloudflare quick-tunnel hostname that changes
+# on every restart) so neither is hardcoded here — see issues #19 and #63.
+# Both have real AUTHPLANE_* overrides, applied after this file loads:
+# AUTHPLANE_SERVER_ISSUER and AUTHPLANE_SERVER_ALLOWED_ORIGINS (comma-
+# separated), set in infra/.secrets.env. Left unset here and in the
+# environment, issuer falls back to AuthPlane's http://localhost:9000
+# default and allowed_origins falls back to empty (no CORS; browser MCP
+# clients then fail preflight — logged as a startup WARN, not a boot
+# failure).
 server:
-  issuer: "https://luis-ridge-bridal-jewellery.trycloudflare.com"
   address: ":9000"
-  allowed_origins:
-    - "https://cyan-schools-roll-396.alpic.dev"
 
 storage:
   driver: sqlite
@@ -46,9 +53,12 @@ data_encryption:
   aes_master:
     key_env: AUTHPLANE_DATA_ENC_KEY
 
+# connect.redirect_base_url and connect.allowed_return_urls: same
+# deployment-specific-hostname problem as server.issuer/allowed_origins
+# above, same fix — set via AUTHPLANE_CONNECT_REDIRECT_BASE_URL and
+# AUTHPLANE_CONNECT_ALLOWED_RETURN_URLS (comma-separated) in
+# infra/.secrets.env. Both optional at the AuthPlane level; leaving them
+# unset disables the upstream-connect redirect surface rather than
+# failing boot — see docs/guides/deploy/configuration.md.
 connect:
   state_secret: "${AUTHPLANE_CONNECT_STATE_SECRET}"
-  redirect_base_url: "https://luis-ridge-bridal-jewellery.trycloudflare.com"
-  allowed_return_urls:
-    - "https://cyan-schools-roll-396.alpic.dev"
-    - "https://cyan-schools-roll-396.alpic.dev/mcp"
