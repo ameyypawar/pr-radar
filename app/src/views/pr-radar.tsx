@@ -12,8 +12,8 @@ interface BucketCounts {
 
 const CHIPS: Array<{ bucket: Bucket; emoji: string; label: string; countKey: keyof BucketCounts }> = [
   { bucket: "BLOCKED_ON_YOU", emoji: "🔴", label: "Blocked on you", countKey: "blockedOnYou" },
-  { bucket: "WAITING_ON_MAINTAINER", emoji: "🟡", label: "Waiting on maintainer", countKey: "waitingOnMaintainer" },
   { bucket: "STALE", emoji: "💤", label: "Stale", countKey: "stale" },
+  { bucket: "WAITING_ON_MAINTAINER", emoji: "🟡", label: "Waiting on maintainer", countKey: "waitingOnMaintainer" },
   { bucket: "DRAFT", emoji: "⚪", label: "Draft", countKey: "draft" },
 ];
 
@@ -58,6 +58,19 @@ function reviewLabel(decision: string | null): string {
       return "Review required";
     default:
       return "No review yet";
+  }
+}
+
+function tokenSourceLabel(source: string): string | null {
+  switch (source) {
+    case "broker":
+      return "token via GitHub connection";
+    case "env":
+      return "token via local .env";
+    case "none":
+      return null;
+    default:
+      return null;
   }
 }
 
@@ -123,6 +136,7 @@ export default function PrRadar() {
 
   const { totalCount, truncated, counts, prs, login, tokenSource, connectPrompt } = info.output;
   const visiblePrs = selectedBucket ? prs.filter((pr) => pr.bucket === selectedBucket) : prs;
+  const tokenLabel = tokenSourceLabel(tokenSource);
 
   return (
     <div className="pr-root">
@@ -189,7 +203,7 @@ export default function PrRadar() {
 
       <div className="pr-meta-footer">
         <span>@{login}</span>
-        <span>token via {tokenSource === "broker" ? "GitHub connection" : "local .env"}</span>
+        {tokenLabel ? <span>{tokenLabel}</span> : null}
       </div>
     </div>
   );

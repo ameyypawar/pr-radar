@@ -76,6 +76,9 @@ export async function getGitHubToken(extra: unknown): Promise<GitHubTokenResult>
 /**
  * Branch A: an RFC 8693 token exchange against AuthPlane, trading the
  * caller's own AuthPlane access token for a GitHub token scoped to them.
+ * (RFC 8693 inherits RFC 8707's requirement that `resource` be an absolute
+ * URI; AuthPlane addresses brokers by resource slug here instead, so the
+ * `resource: "github"` below is their API contract, not an RFC 8707 URI.)
  *
  * Returns `{ ok: false, reason }` (no throw) when the exchange plainly isn't
  * applicable — no subject token on this request, or no broker client

@@ -21,8 +21,6 @@ const OPEN_PULL_REQUESTS_QUERY = `
           repository { nameWithOwner }
           reviewDecision
           commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-          comments(last: 1) { totalCount nodes { author { login } createdAt } }
-          reviews(last: 1) { totalCount nodes { author { login } state } }
         }
       }
     }
@@ -49,14 +47,6 @@ export interface RawPullRequest {
   reviewDecision: string | null;
   commits: {
     nodes: ({ commit: { statusCheckRollup: { state: string } | null } | null } | null)[] | null;
-  } | null;
-  comments: {
-    totalCount: number;
-    nodes: ({ author: { login: string } | null; createdAt: string } | null)[] | null;
-  } | null;
-  reviews: {
-    totalCount: number;
-    nodes: ({ author: { login: string } | null; state: string } | null)[] | null;
   } | null;
 }
 
