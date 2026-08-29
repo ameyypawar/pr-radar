@@ -17,6 +17,9 @@ infra/data/
 *.db
 *.log
 
+# supervisor runtime state (logs + pidfile) — infra/supervise.sh
+infra/logs/
+
 # os / editor
 .DS_Store
 .vscode/
