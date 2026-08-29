@@ -1,7 +1,13 @@
 import type { CSSProperties } from "react";
 import { useLayout } from "skybridge/web";
-import type { PullRequestSummary } from "../triage.js";
-import { BUCKET_COUNT_KEY, BUCKET_LABEL, BUCKET_ORDER, BUCKET_PILL_CLASS, type BucketCounts } from "./bucket-meta.js";
+import {
+  BUCKET_COUNT_KEY,
+  BUCKET_LABEL,
+  BUCKET_ORDER,
+  type BucketCounts,
+  type PullRequestSummary,
+} from "../triage.js";
+import { BUCKET_PILL_CLASS } from "./bucket-meta.js";
 import { PrRow } from "./pr-row.js";
 
 export type BoardLayout = "urgency" | "repository";

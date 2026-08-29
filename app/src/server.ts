@@ -1,42 +1,41 @@
 import { authplaneProvider, McpServer } from "skybridge/server";
 import { z } from "zod";
 import { env } from "./env.js";
-import { ConsentRequiredError, getGitHubToken, type GitHubTokenSource } from "./github-token.js";
+import { ConsentRequiredError, getGitHubToken, GITHUB_TOKEN_SOURCES, type GitHubTokenSource } from "./github-token.js";
 import { fetchOpenPullRequests, type RawPullRequest } from "./github.js";
-import type { Bucket, PullRequestSummary } from "./triage.js";
-import { sortPullRequestSummaries, triage } from "./triage.js";
+import {
+  BUCKET_COUNT_KEY,
+  BUCKET_ORDER,
+  BUCKET_TEXT,
+  countByBucket,
+  sortPullRequestSummaries,
+  triage,
+  type Bucket,
+  type BucketCountKey,
+  type BucketCounts,
+  type PullRequestSummary,
+} from "./triage.js";
 
-function countByBucket(prs: PullRequestSummary[]) {
-  return {
-    blockedOnYou: prs.filter((pr) => pr.bucket === "BLOCKED_ON_YOU").length,
-    waitingOnMaintainer: prs.filter((pr) => pr.bucket === "WAITING_ON_MAINTAINER").length,
-    stale: prs.filter((pr) => pr.bucket === "STALE").length,
-    draft: prs.filter((pr) => pr.bucket === "DRAFT").length,
-  };
-}
-
-const BUCKET_COUNT_KEY: Record<Bucket, keyof ReturnType<typeof countByBucket>> = {
-  BLOCKED_ON_YOU: "blockedOnYou",
-  WAITING_ON_MAINTAINER: "waitingOnMaintainer",
-  STALE: "stale",
-  DRAFT: "draft",
-};
-
-const BUCKET_TEXT: Record<Bucket, string> = {
-  BLOCKED_ON_YOU: "blocked on you",
-  WAITING_ON_MAINTAINER: "waiting on a maintainer",
-  STALE: "stale",
-  DRAFT: "draft",
-};
+/** `counts`' shape, keyed the same way `countByBucket()` keys its result — derived from `BUCKET_ORDER`/`BUCKET_COUNT_KEY` (triage.ts) so it can't drift from the object it actually validates. */
+const countsSchema = z.object(
+  BUCKET_ORDER.reduce(
+    (shape, bucket) => {
+      shape[BUCKET_COUNT_KEY[bucket]] = z.number();
+      return shape;
+    },
+    {} as Record<BucketCountKey, z.ZodNumber>,
+  ),
+);
 
 /**
  * One-line, model-readable summary. Deliberately terse: the view renders the full list, so this
- * must not enumerate individual PRs. `bucket` no longer filters the returned `prs` (the view does
- * that interactively) — it only shapes this text, leading with that bucket's count.
+ * must not enumerate individual PRs. `bucket` does not filter the returned `prs` — every open PR
+ * is always included, and the view always shows all of them too (see #25) — it only shapes this
+ * text, leading with that bucket's count.
  */
 function summarize(
   totalCount: number,
-  counts: ReturnType<typeof countByBucket>,
+  counts: BucketCounts,
   truncated: boolean,
   tokenSource: GitHubTokenSource,
   bucket?: Bucket,
@@ -47,7 +46,8 @@ function summarize(
   const sourceNote = tokenSource === "env" ? "These are the server's fallback account's pull requests, not yours. " : "";
   const scopeNote = truncated ? ` (counts cover a partial subset, not the full ${totalCount})` : "";
   const lead = bucket ? `${counts[BUCKET_COUNT_KEY[bucket]]} ${BUCKET_TEXT[bucket]}. ` : "";
-  return `${sourceNote}${lead}Results are shown in the view above${scopeNote}. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
+  const breakdown = BUCKET_ORDER.map((b) => `${counts[BUCKET_COUNT_KEY[b]]} ${BUCKET_TEXT[b]}`).join(", ");
+  return `${sourceNote}${lead}Results are shown in the view above${scopeNote}. ${breakdown}.`;
 }
 
 /** Readable message for any caught error, so handlers never leak `[object Object]` or a raw stack. */
@@ -106,28 +106,24 @@ const server = new McpServer(
         "Fetch your open GitHub pull requests, triaged by who needs to act next: blocked on you (changes requested or failing or errored CI), stale (no activity in 14+ days), waiting on a maintainer, or draft. Results render in an interactive view — do not restate them in your reply.",
       inputSchema: {
         bucket: z
-          .enum(["BLOCKED_ON_YOU", "STALE", "WAITING_ON_MAINTAINER", "DRAFT"])
+          .enum(BUCKET_ORDER)
           .optional()
           .describe(
-            "Optional filter: BLOCKED_ON_YOU, STALE, WAITING_ON_MAINTAINER, or DRAFT. Omit to return every open PR.",
+            `Optional: ${BUCKET_ORDER.join(", ")}. Leads the one-line summary with that bucket's count ` +
+              `(e.g. "3 blocked on you") — every open PR is returned regardless of this value.`,
           ),
       },
       outputSchema: {
         totalCount: z.number(),
         truncated: z.boolean(),
-        counts: z.object({
-          blockedOnYou: z.number(),
-          waitingOnMaintainer: z.number(),
-          stale: z.number(),
-          draft: z.number(),
-        }),
+        counts: countsSchema,
         prs: z.array(
           z.object({
             number: z.number(),
             title: z.string(),
             url: z.string(),
             repo: z.string(),
-            bucket: z.enum(["BLOCKED_ON_YOU", "STALE", "WAITING_ON_MAINTAINER", "DRAFT"]),
+            bucket: z.enum(BUCKET_ORDER),
             isDraft: z.boolean(),
             reviewDecision: z.string().nullable(),
             ciState: z.string().nullable(),
@@ -138,7 +134,7 @@ const server = new McpServer(
           }),
         ),
         login: z.string().optional(),
-        tokenSource: z.enum(["broker", "env", "none"]),
+        tokenSource: z.enum(GITHUB_TOKEN_SOURCES),
         connectPrompt: z
           .object({
             needed: z.literal(true),
@@ -183,7 +179,7 @@ const server = new McpServer(
             structuredContent: {
               totalCount: 0,
               truncated: false,
-              counts: { blockedOnYou: 0, waitingOnMaintainer: 0, stale: 0, draft: 0 },
+              counts: countByBucket([]),
               prs: [] as PullRequestSummary[],
               tokenSource: "none" as const,
               connectPrompt: {

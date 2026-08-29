@@ -24,3 +24,6 @@ infra/data/
 
 # claude session exports (contain secrets/passwords) — never commit
 infra/*.txt
+
+# Conversation exports — never publish these
+20*-*.txt

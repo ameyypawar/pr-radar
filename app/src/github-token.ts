@@ -18,8 +18,18 @@
 
 import type { AuthInfo } from "skybridge/server";
 import { env } from "./env.js";
+import { safeHttpUrl } from "./url-safety.js";
 
-export type GitHubTokenSource = "broker" | "env";
+/**
+ * Where a resolved GitHub token came from — plus "none" for server.ts's pr-radar handler, when
+ * even the env fallback isn't available and nothing is returned at all. One three-value
+ * definition, so the output Zod enum (server.ts) and the view's switch (pr-radar.tsx) both derive
+ * from it instead of restating the three literals by hand. `getGitHubToken` below only ever
+ * returns "broker" or "env" (it throws rather than producing "none"); the type stays the full
+ * three so every consumer of "where did this token come from" shares one definition. See #59.
+ */
+export const GITHUB_TOKEN_SOURCES = ["broker", "env", "none"] as const;
+export type GitHubTokenSource = (typeof GITHUB_TOKEN_SOURCES)[number];
 
 export interface GitHubTokenResult {
   token: string;
@@ -175,12 +185,12 @@ async function exchangeForGitHubToken(
  *
  * `consent_url`/`consent_uri`, when present, is resolved against `env.AUTHPLANE_ISSUER` as the
  * base — recovering the common case where AuthPlane sends a relative path like "/connect/github"
- * — then validated with `new URL()` plus an explicit `http:`/`https:` protocol check, not Zod's
- * `.url()`. `.url()` is not a substitute: it accepts `javascript:alert(1)` as a valid URL, since
- * it checks URL well-formedness, not scheme. This allowlist is unchanged by #29 and gates the
- * actual returned value either way — an absolute candidate is checked as-is (`new URL` ignores
- * the base once the candidate is already absolute), so a hostile or malformed scheme is rejected
- * exactly as before.
+ * — through `safeHttpUrl()` (url-safety.ts), the same http(s)-only scheme allowlist used for
+ * GitHub PR URLs (see #66). Not Zod's `.url()`: `.url()` is not a substitute, since it accepts
+ * `javascript:alert(1)` as a valid URL — it checks well-formedness, not scheme. This allowlist is
+ * unchanged by #29 and gates the actual returned value either way — an absolute candidate is
+ * checked as-is (`new URL` ignores the base once the candidate is already absolute), so a hostile
+ * or malformed scheme is rejected exactly as before.
  *
  * What #29 changes is what happens on rejection: a missing, malformed, or disallowed-scheme
  * candidate no longer collapses to `null` (which the caller would mistake for "not a consent
@@ -202,14 +212,11 @@ function extractConsentUrl(rawBody: string): string | null {
 
   const candidate = parsed.consent_url ?? parsed.consent_uri ?? null;
   if (candidate !== null) {
-    try {
-      const url = new URL(candidate, env.AUTHPLANE_ISSUER);
-      if (url.protocol === "http:" || url.protocol === "https:") {
-        return url.href;
-      }
-    } catch {
-      // Malformed even after resolving against the issuer — fall through to the issuer fallback
-      // below rather than returning null.
+    // Malformed, or resolves to a disallowed scheme — either way `safeHttpUrl` returns null and
+    // this falls through to the issuer fallback below rather than returning null itself.
+    const safe = safeHttpUrl(candidate, env.AUTHPLANE_ISSUER);
+    if (safe !== null) {
+      return safe;
     }
   }
 

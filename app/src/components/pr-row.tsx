@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import type { PullRequestSummary } from "../triage.js";
+import { safeHttpUrl } from "../url-safety.js";
 
 function ciMeta(state: string | null): { dot: string; label: string } | null {
   switch (state) {
@@ -50,8 +51,11 @@ export function PrRow({ pr, hideRepo = false }: { pr: PullRequestSummary; hideRe
   const labels = [ci?.label, reviewLabel(pr.reviewDecision), updatedLabel(pr.staleDays)].filter(
     (label): label is string => Boolean(label),
   );
+  // Same http(s)-only allowlist as the consent URL (github-token.ts) — see #66. GitHub-sourced,
+  // so this practically never rejects anything; a rejected scheme drops the link, not the row.
+  const href = safeHttpUrl(pr.url) ?? undefined;
   return (
-    <a className="pr-row" href={pr.url} target="_blank" rel="noreferrer">
+    <a className="pr-row" href={href} target="_blank" rel="noreferrer">
       <div className="pr-title">{pr.title}</div>
       <div className="pr-row-meta">
         {ci ? <span className={`pr-dot ${ci.dot}`} aria-hidden="true" /> : null}

@@ -1,7 +1,9 @@
 import { Fragment } from "react";
 import { useDisplayMode, useLayout, useViewState, type Theme } from "skybridge/web";
 import { useToolInfo } from "../helpers.js";
-import { BUCKET_COUNT_KEY, BUCKET_DOT_CLASS, BUCKET_LABEL, BUCKET_ORDER, BUCKET_SHORT_LABEL, type BucketCounts } from "../components/bucket-meta.js";
+import type { GitHubTokenSource } from "../github-token.js";
+import { BUCKET_COUNT_KEY, BUCKET_LABEL, BUCKET_ORDER, type BucketCounts } from "../triage.js";
+import { BUCKET_DOT_CLASS, BUCKET_SHORT_LABEL } from "../components/bucket-meta.js";
 import { PrBoard, type BoardLayout } from "../components/pr-board.js";
 import { PrRow } from "../components/pr-row.js";
 import { ErrorBoundary } from "../components/error-boundary.js";
@@ -10,7 +12,7 @@ import "./pr-radar.css";
 
 const SKELETON_ROW_COUNT = 3;
 
-function tokenSourceLabel(source: "broker" | "env" | "none"): string | null {
+function tokenSourceLabel(source: GitHubTokenSource): string | null {
   switch (source) {
     case "broker":
       return "token via GitHub connection";

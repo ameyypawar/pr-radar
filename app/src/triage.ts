@@ -5,7 +5,50 @@
 
 import type { RawPullRequest } from "./github.js";
 
-export type Bucket = "BLOCKED_ON_YOU" | "STALE" | "WAITING_ON_MAINTAINER" | "DRAFT";
+/**
+ * Single source of truth for the four buckets: identity, canonical display/priority order (most
+ * urgent first), which `BucketCounts` key each rolls up into, the phrase used in the one-line
+ * tool-result summary, and the display label. `Bucket`, the sort order, both Zod enums (server.ts),
+ * the counts shape, the summary sentence (server.ts), and the view's chips/column labels
+ * (components/bucket-meta.ts) all derive from this array — nothing about the four buckets should
+ * be spelled out by hand anywhere else. See #59.
+ */
+export const BUCKETS = [
+  { id: "BLOCKED_ON_YOU", countKey: "blockedOnYou", text: "blocked on you", label: "Blocked on you" },
+  { id: "STALE", countKey: "stale", text: "stale", label: "Stale" },
+  {
+    id: "WAITING_ON_MAINTAINER",
+    countKey: "waitingOnMaintainer",
+    text: "waiting on a maintainer",
+    label: "Waiting on maintainer",
+  },
+  { id: "DRAFT", countKey: "draft", text: "draft", label: "Draft" },
+] as const;
+
+export type Bucket = (typeof BUCKETS)[number]["id"];
+export type BucketCountKey = (typeof BUCKETS)[number]["countKey"];
+export type BucketCounts = Record<BucketCountKey, number>;
+
+/** Builds a `Record<Bucket, T>` by picking one field (or the index) off each `BUCKETS` entry, in order. */
+function bucketRecord<T>(pick: (meta: (typeof BUCKETS)[number], index: number) => T): Record<Bucket, T> {
+  const result = {} as Record<Bucket, T>;
+  BUCKETS.forEach((meta, index) => {
+    result[meta.id] = pick(meta, index);
+  });
+  return result;
+}
+
+/** Canonical bucket order as a non-empty tuple — feeds both Zod enums in server.ts and the view's iteration order. */
+export const BUCKET_ORDER = BUCKETS.map((b) => b.id) as [Bucket, ...Bucket[]];
+
+/** Bucket -> its `BucketCounts` key. */
+export const BUCKET_COUNT_KEY: Record<Bucket, BucketCountKey> = bucketRecord((b) => b.countKey);
+
+/** Bucket -> the phrase used in the one-line tool-result summary (server.ts). */
+export const BUCKET_TEXT: Record<Bucket, string> = bucketRecord((b) => b.text);
+
+/** Bucket -> display label (view chips, board columns). */
+export const BUCKET_LABEL: Record<Bucket, string> = bucketRecord((b) => b.label);
 
 const STALE_THRESHOLD_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -83,12 +126,7 @@ export function triage(pr: RawPullRequest, now: number = Date.now()): PullReques
   };
 }
 
-const BUCKET_SORT_ORDER: Record<Bucket, number> = {
-  BLOCKED_ON_YOU: 0,
-  STALE: 1,
-  WAITING_ON_MAINTAINER: 2,
-  DRAFT: 3,
-};
+const BUCKET_SORT_ORDER: Record<Bucket, number> = bucketRecord((_meta, index) => index);
 
 /**
  * Sorts triaged PRs for display: BLOCKED_ON_YOU, then STALE, then
@@ -112,4 +150,16 @@ export function sortPullRequestSummaries(prs: PullRequestSummary[]): PullRequest
     if (aValid !== bValid) return aValid ? -1 : 1;
     return 0; // both unparseable — tied, stable relative order
   });
+}
+
+/** Tallies triaged PRs per bucket, keyed by each bucket's `BucketCounts` key (see `BUCKETS`). */
+export function countByBucket(prs: PullRequestSummary[]): BucketCounts {
+  const counts = {} as BucketCounts;
+  for (const meta of BUCKETS) {
+    counts[meta.countKey] = 0;
+  }
+  for (const pr of prs) {
+    counts[BUCKET_COUNT_KEY[pr.bucket]] += 1;
+  }
+  return counts;
 }
