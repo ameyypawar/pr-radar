@@ -9,12 +9,16 @@
     "dev:tunnel": "skybridge dev --tunnel",
     "build": "skybridge build",
     "start": "skybridge start",
-    "deploy": "alpic deploy"
+    "deploy": "alpic deploy",
+    "test": "node --import tsx --import ./scripts/env-setup.ts --test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "skybridge": "^1.4.1",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "zod": "4.5.2"
   },
   "devDependencies": {
     "@skybridge/devtools": "^1.2.7",
