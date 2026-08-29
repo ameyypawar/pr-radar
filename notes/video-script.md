@@ -36,7 +36,7 @@ are notes, not a script — say them in your own words, don't read them.
 | 1:35–2:00 | Consent screen, two scopes visible: `radar:read`, `radar:nudge` | "Two scopes, and that's the whole ask. The token AuthPlane issues is audience-bound to this one server — RFC 8707 — so it isn't usable anywhere else." |
 | 2:00–2:30 | Run `radar-ping`. Identity card renders — email, scope pills, client id | "That's the signed-in identity as the authorization server sees it. And this is an MCP App view: a React component rendering in the client, not a wall of text." |
 | 2:30–2:50 | Run `pr-radar`. Main view renders: four bucket chips with counts | "Here's the actual product. Every open PR, bucketed by who has to act next — blocked on you, waiting on a maintainer, stale, draft." |
-| 2:50–3:10 | Scroll two or three PR rows — CI dot, review state, age | "Each row carries CI state, review state, and how long it's been sitting. Blocked-on-you means changes requested or failing CI." |
+| 2:50–3:10 | Scroll two or three PR rows — CI dot, review state, age | "Each row carries CI state, review state, and how long it's been sitting. Blocked-on-you means changes requested or failing or errored CI." |
 | 3:10–3:30 | Click the **Blocked on you** chip, then the **Stale** chip | "Filtering happens in the view. No second round trip to the model." |
 | 3:30–3:50 | AuthPlane audit log, tailing. Show `broker_grant.created provider=github` | "Now the part that matters. This is the authorization server's audit log." |
 | 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "The GitHub refresh grant is encrypted inside AuthPlane and never reaches this server. It presents its own audience-bound token, and AuthPlane exchanges that for a short-lived GitHub token — RFC 8693 — once per call." |
@@ -69,7 +69,7 @@ buckets, with AuthPlane in front of it. Repo: `TODO`. Video: `TODO`. Built in `T
 I have 77 open pull requests across 22 public repositories. The question I need answered isn't
 "what are my PRs" — it's "which ones are blocked on me right now". PR Radar answers that inside the
 MCP client, as an interactive React view: buckets for blocked-on-you (changes requested or failing
-CI), waiting-on-maintainer, stale at 14+ days, and draft.
+or errored CI), waiting-on-maintainer, stale at 14+ days, and draft.
 
 **SDK and language.** TypeScript, using Skybridge's built-in `authplaneProvider`. The authorization
 server is AuthPlane authserver, self-hosted in Docker with SQLite storage and ES256 signing.

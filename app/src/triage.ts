@@ -10,6 +10,9 @@ export type Bucket = "BLOCKED_ON_YOU" | "STALE" | "WAITING_ON_MAINTAINER" | "DRA
 const STALE_THRESHOLD_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** CI states that put a PR on the author, not a maintainer. */
+const BLOCKING_CI_STATES: ReadonlySet<string> = new Set(["FAILURE", "ERROR"]);
+
 export interface PullRequestSummary {
   number: number;
   title: string;
@@ -40,8 +43,8 @@ function ciStateOf(pr: RawPullRequest): string | null {
 
 /**
  * Buckets a raw PR node, precedence in this order: DRAFT, then
- * BLOCKED_ON_YOU (changes requested or failing CI), then STALE (no update
- * in 14+ days), then WAITING_ON_MAINTAINER as the default.
+ * BLOCKED_ON_YOU (changes requested or failing or errored CI), then STALE
+ * (no update in 14+ days), then WAITING_ON_MAINTAINER as the default.
  */
 export function triage(pr: RawPullRequest, now: number = Date.now()): PullRequestSummary {
   const isDraft = pr.isDraft === true;
@@ -53,9 +56,9 @@ export function triage(pr: RawPullRequest, now: number = Date.now()): PullReques
   let bucket: Bucket;
   if (isDraft) {
     bucket = "DRAFT";
-  } else if (reviewDecision === "CHANGES_REQUESTED" || ciState === "FAILURE") {
+  } else if (reviewDecision === "CHANGES_REQUESTED" || (ciState !== null && BLOCKING_CI_STATES.has(ciState))) {
     bucket = "BLOCKED_ON_YOU";
-  } else if (staleDays > STALE_THRESHOLD_DAYS) {
+  } else if (staleDays >= STALE_THRESHOLD_DAYS) {
     bucket = "STALE";
   } else {
     bucket = "WAITING_ON_MAINTAINER";

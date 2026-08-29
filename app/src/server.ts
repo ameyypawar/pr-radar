@@ -3,14 +3,8 @@ import { z } from "zod";
 import { env } from "./env.js";
 import { ConsentRequiredError, getGitHubToken, type GitHubTokenSource } from "./github-token.js";
 import { fetchOpenPullRequests, type RawPullRequest } from "./github.js";
-import type { Bucket, PullRequestSummary } from "./triage.js";
+import type { PullRequestSummary } from "./triage.js";
 import { sortPullRequestSummaries, triage } from "./triage.js";
-
-const KNOWN_BUCKETS: Bucket[] = ["BLOCKED_ON_YOU", "STALE", "WAITING_ON_MAINTAINER", "DRAFT"];
-
-function isBucket(value: unknown): value is Bucket {
-  return typeof value === "string" && (KNOWN_BUCKETS as string[]).includes(value);
-}
 
 function countByBucket(prs: PullRequestSummary[]) {
   return {
@@ -36,7 +30,7 @@ function errorMessage(err: unknown): string {
 }
 
 const server = new McpServer(
-  { name: "pr-radar", version: "0.1.0" },
+  { name: "pr-radar", version: "0.0.1" },
   { capabilities: {} },
   {
     oauth: await authplaneProvider<{ email?: string }>({
@@ -83,10 +77,10 @@ const server = new McpServer(
     {
       name: "pr-radar",
       description:
-        "Fetch your open GitHub pull requests, triaged by who needs to act next: blocked on you (changes requested or failing CI), stale (no activity in 14+ days), waiting on a maintainer, or draft. Results render in an interactive view — do not restate them in your reply.",
+        "Fetch your open GitHub pull requests, triaged by who needs to act next: blocked on you (changes requested or failing or errored CI), stale (no activity in 14+ days), waiting on a maintainer, or draft. Results render in an interactive view — do not restate them in your reply.",
       inputSchema: {
         bucket: z
-          .string()
+          .enum(["BLOCKED_ON_YOU", "STALE", "WAITING_ON_MAINTAINER", "DRAFT"])
           .optional()
           .describe(
             "Optional filter: BLOCKED_ON_YOU, STALE, WAITING_ON_MAINTAINER, or DRAFT. Omit to return every open PR.",
@@ -205,7 +199,7 @@ const server = new McpServer(
 
       const allPrs = sortPullRequestSummaries(rawPrs.map((pr) => triage(pr)));
       const counts = countByBucket(allPrs);
-      const prs = isBucket(input.bucket) ? allPrs.filter((pr) => pr.bucket === input.bucket) : allPrs;
+      const prs = input.bucket ? allPrs.filter((pr) => pr.bucket === input.bucket) : allPrs;
 
       return {
         structuredContent: {
@@ -228,7 +222,10 @@ const server = new McpServer(
       description:
         "Preview a follow-up comment on one of your pull requests. Dry run only — does not post to GitHub.",
       inputSchema: {
-        repo: z.string().describe('Repository as "owner/name", e.g. "OpenHands/OpenHands".'),
+        repo: z
+          .string()
+          .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/, 'Must be "owner/name".')
+          .describe('Repository as "owner/name", e.g. "OpenHands/OpenHands".'),
         number: z.number().int().positive().describe("Pull request number."),
         message: z.string().optional().describe("Custom nudge text. Defaults to a generic check-in message."),
       },
@@ -238,12 +235,18 @@ const server = new McpServer(
     (input) => {
       const body =
         input.message?.trim() || "Just checking in on this PR — let me know if there's anything blocking review.";
-      const wouldPostTo = `https://api.github.com/repos/${input.repo}/issues/${input.number}/comments`;
+      const slashIndex = input.repo.indexOf("/");
+      const owner = input.repo.slice(0, slashIndex);
+      const name = input.repo.slice(slashIndex + 1);
+      const wouldPostTo = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${input.number}/comments`;
 
       // TODO: actually POST `body` to `wouldPostTo` (with the nudge-scoped
       // GitHub token) once this tool is ready to write to GitHub. Deferred
       // intentionally for now — this exists to demonstrate `radar:nudge` as
       // a scope gated separately from `radar:read`.
+      // Before that lands: verify the PR is authored by the signed-in user —
+      // the tool description promises "one of your pull requests" and
+      // nothing currently enforces it.
       return {
         structuredContent: { wouldPostTo, body, dryRun: true },
         content: [

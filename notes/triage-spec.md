@@ -14,9 +14,9 @@ against `author:ameyypawar`: **77 open PRs**, 18 with failing CI, 1 changes-requ
 
 | Bucket | Rule | Meaning |
 |---|---|---|
-| 🔴 `BLOCKED_ON_YOU` | `reviewDecision == CHANGES_REQUESTED` **or** CI `state == FAILURE` | You must act |
-| 🟡 `WAITING_ON_MAINTAINER` | `reviewDecision in (REVIEW_REQUIRED, APPROVED)` and CI not failing | Their turn |
-| 💤 `STALE` | `updatedAt` older than 14 days and not already blocked-on-you | Candidate for a nudge |
+| 🔴 `BLOCKED_ON_YOU` | `reviewDecision == CHANGES_REQUESTED` **or** CI `state in (FAILURE, ERROR)` | You must act |
+| 🟡 `WAITING_ON_MAINTAINER` | `reviewDecision in (REVIEW_REQUIRED, APPROVED)` and CI not failing or errored | Their turn |
+| 💤 `STALE` | 14 or more whole days since `updatedAt`, and not already blocked-on-you | Candidate for a nudge |
 | ⚪ `DRAFT` | `isDraft == true` | Not ready |
 
 Precedence: `DRAFT` → `BLOCKED_ON_YOU` → `STALE` → `WAITING_ON_MAINTAINER`.
@@ -24,5 +24,6 @@ Precedence: `DRAFT` → `BLOCKED_ON_YOU` → `STALE` → `WAITING_ON_MAINTAINER`
 ## Notes / gotchas
 - `reviewDecision` is `null` on repos without review requirements — render as "—", never crash.
 - `statusCheckRollup` is `null` when a repo runs no checks — same.
+- `statusCheckRollup.state` has five values: `EXPECTED`, `ERROR`, `FAILURE`, `PENDING`, `SUCCESS`. Only `FAILURE` and `ERROR` are author-actionable — both count as blocking.
 - `search` caps at 100 per page; the query uses `first: 100` to cover today's dataset with headroom. `truncated` in the tool output (and the view header) surfaces it directly when a dataset outgrows that cap, rather than assuming it never will.
 - The nudge write action should target PRs in the `STALE` bucket only.
