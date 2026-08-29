@@ -69,7 +69,7 @@ export async function getGitHubToken(extra: unknown): Promise<GitHubTokenResult>
   }
 
   throw new Error(
-    "No GitHub token available. Connect your GitHub account to PR Radar, or set GITHUB_TOKEN and ALLOW_ENV_TOKEN_FALLBACK in .env for local development.",
+    `GitHub token broker exchange failed (${fallbackReason}). This is a server-side problem, not a missing GitHub connection — reconnecting will not fix it. For local development only, set GITHUB_TOKEN and ALLOW_ENV_TOKEN_FALLBACK in .env.`,
   );
 }
 

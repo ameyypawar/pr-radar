@@ -141,7 +141,9 @@ const server = new McpServer(
       } catch (err) {
         if (!(err instanceof ConsentRequiredError)) {
           return {
-            content: [{ type: "text" as const, text: `Could not get a GitHub token: ${errorMessage(err)}` }],
+            content: [
+              { type: "text" as const, text: `PR Radar could not load your pull requests: ${errorMessage(err)}` },
+            ],
             isError: true,
           };
         }
