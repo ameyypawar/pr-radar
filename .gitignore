@@ -20,3 +20,4 @@ infra/data/
 .DS_Store
 .vscode/
 .idea/
+infra/urls.env

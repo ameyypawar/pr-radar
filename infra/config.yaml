@@ -1,6 +1,8 @@
 server:
-  issuer: "http://localhost:9000"
+  issuer: "https://concentration-editorials-discounted-award.trycloudflare.com"
   address: ":9000"
+  allowed_origins:
+    - "*"
 
 storage:
   driver: sqlite
@@ -11,6 +13,10 @@ storage:
 signing:
   algorithm: ES256
   key_path: "/data/keys"
+
+session:
+  secure: true
+  secret: "${AUTHPLANE_SESSION_SECRET}"
 
 dcr:
   mode: open
