@@ -42,9 +42,9 @@ are notes, not a script — say them in your own words, don't read them.
 | 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "The GitHub refresh grant is encrypted inside AuthPlane and never reaches this server. It presents its own audience-bound token, and AuthPlane exchanges that for a short-lived GitHub token — RFC 8693 — once per call." |
 | 4:15–4:30 | Point at the `aes_master` line in the boot-time feature table | "The GitHub refresh grant is encrypted at rest under `aes_master` and never leaves the authorization server." |
 | 4:30–4:45 | Scroll back to `scopes=public_repo` in the audit line | "Note the scope: `public_repo`, not `repo`. Every PR being tracked is public, so the private surface was never needed and was never requested." |
-| 4:45–5:00 | Run `nudge-pr` on a stale PR. Client stops on the approval prompt — hold on it | "The write path carries a separate scope, `radar:nudge`, and the client still stops here for approval — because the tool declares `readOnlyHint: false`. Least privilege on both sides." |
+| 4:45–5:00 | Run `nudge-pr` on a stale PR. Client stops on the approval prompt — approve it, hold on the dry-run response | "This tool declares `readOnlyHint: false` — write-capable — and carries its own scope, `radar:nudge`. The client stops for approval regardless. The post itself is still a dry run." |
 
-Close on the approval prompt. Don't approve it on camera, don't add an outro.
+Approve on camera and hold on the dry-run response — that line is the honest payoff, not the approval prompt itself. No outro after it.
 
 ## If something goes wrong mid-take
 

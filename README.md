@@ -27,7 +27,7 @@ tool handler runs. Client registration is dynamic (RFC 7591), so the MCP client 
 token via RFC 8693 token exchange against an AuthPlane *Broker* resource. The GitHub refresh grant
 is encrypted at rest inside AuthPlane and never reaches this server.
 
-Scopes are enforced per tool: `radar:read` to view your radar, `radar:nudge` for the write action.
+Scopes are enforced per tool: `radar:read` to view your radar, `radar:nudge` for the write-capable tool — a dry run today.
 
 ## Layout
 
