@@ -1,3 +1,4 @@
+# Mirrors `OPEN_PULL_REQUESTS_QUERY` in `app/src/github.ts` — must change with it.
 # Example variables: { "q": "is:open is:pr author:@me archived:false" }
 # `author:@me` resolves against the bearer token making the request.
 query($q: String!) {
@@ -10,8 +11,6 @@ query($q: String!) {
         repository { nameWithOwner }
         reviewDecision
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-        comments(last: 1) { totalCount nodes { author { login } createdAt } }
-        reviews(last: 1) { totalCount nodes { author { login } state } }
       }
     }
   }
