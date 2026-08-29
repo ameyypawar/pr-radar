@@ -181,7 +181,12 @@ export default function PrRadar() {
         })}
       </div>
 
-      {prs.length === 0 ? (
+      {connectPrompt?.needed && prs.length === 0 ? (
+        <div className="pr-empty">
+          <div className="pr-empty-title">Nothing to show yet</div>
+          <div className="pr-empty-sub">Connect GitHub above to load your pull requests.</div>
+        </div>
+      ) : prs.length === 0 ? (
         <div className="pr-empty">
           <div className="pr-empty-title">You&rsquo;re all caught up</div>
           <div className="pr-empty-sub">No open pull requests for {login}.</div>
@@ -190,7 +195,7 @@ export default function PrRadar() {
         <div className="pr-empty">
           <div className="pr-empty-title">Nothing in this bucket</div>
           <button type="button" className="pr-clear-filter" onClick={() => setSelectedBucket(null)}>
-            Show all {totalCount}
+            Show all {prs.length}
           </button>
         </div>
       ) : (

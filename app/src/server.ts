@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "./env.js";
 import { ConsentRequiredError, getGitHubToken, type GitHubTokenSource } from "./github-token.js";
 import { fetchOpenPullRequests, type RawPullRequest } from "./github.js";
-import type { PullRequestSummary } from "./triage.js";
+import type { Bucket, PullRequestSummary } from "./triage.js";
 import { sortPullRequestSummaries, triage } from "./triage.js";
 
 function countByBucket(prs: PullRequestSummary[]) {
@@ -15,13 +15,37 @@ function countByBucket(prs: PullRequestSummary[]) {
   };
 }
 
-/** One-line, model-readable summary. Deliberately terse: the view renders the full list, so this must not enumerate individual PRs. */
-function summarize(totalCount: number, counts: ReturnType<typeof countByBucket>, truncated: boolean): string {
+const BUCKET_COUNT_KEY: Record<Bucket, keyof ReturnType<typeof countByBucket>> = {
+  BLOCKED_ON_YOU: "blockedOnYou",
+  WAITING_ON_MAINTAINER: "waitingOnMaintainer",
+  STALE: "stale",
+  DRAFT: "draft",
+};
+
+const BUCKET_TEXT: Record<Bucket, string> = {
+  BLOCKED_ON_YOU: "blocked on you",
+  WAITING_ON_MAINTAINER: "waiting on a maintainer",
+  STALE: "stale",
+  DRAFT: "draft",
+};
+
+/**
+ * One-line, model-readable summary. Deliberately terse: the view renders the full list, so this
+ * must not enumerate individual PRs. `bucket` no longer filters the returned `prs` (the view does
+ * that interactively) — it only shapes this text, leading with that bucket's count.
+ */
+function summarize(
+  totalCount: number,
+  counts: ReturnType<typeof countByBucket>,
+  truncated: boolean,
+  bucket?: Bucket,
+): string {
   if (totalCount === 0) {
     return "You have no open pull requests.";
   }
   const scopeNote = truncated ? ` (counts cover a partial subset, not the full ${totalCount})` : "";
-  return `Results are shown in the view above${scopeNote}. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
+  const lead = bucket ? `${counts[BUCKET_COUNT_KEY[bucket]]} ${BUCKET_TEXT[bucket]}. ` : "";
+  return `${lead}Results are shown in the view above${scopeNote}. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
 }
 
 /** Readable message for any caught error, so handlers never leak `[object Object]` or a raw stack. */
@@ -199,19 +223,18 @@ const server = new McpServer(
 
       const allPrs = sortPullRequestSummaries(rawPrs.map((pr) => triage(pr)));
       const counts = countByBucket(allPrs);
-      const prs = input.bucket ? allPrs.filter((pr) => pr.bucket === input.bucket) : allPrs;
 
       return {
         structuredContent: {
           totalCount: issueCount,
           truncated,
           counts,
-          prs,
+          prs: allPrs,
           login,
           tokenSource: source,
           connectPrompt,
         },
-        content: [{ type: "text" as const, text: summarize(issueCount, counts, truncated) }],
+        content: [{ type: "text" as const, text: summarize(issueCount, counts, truncated, input.bucket) }],
         isError: false,
       };
     },
