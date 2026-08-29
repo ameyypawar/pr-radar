@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToolInfo } from "../helpers.js";
 import type { Bucket, PullRequestSummary } from "../triage.js";
+import { ErrorBoundary } from "./error-boundary.js";
 import "./pr-radar.css";
 
 interface BucketCounts {
@@ -111,6 +112,7 @@ function PrRow({ pr }: { pr: PullRequestSummary }) {
 function PrRadarSkeleton() {
   return (
     <div className="pr-root">
+      <div className="pr-skeleton-label">Loading your PR radar…</div>
       <div className="pr-skeleton-line" style={{ width: "45%", height: 18 }} />
       <div className="pr-skeleton-line" style={{ width: "65%", marginTop: 6 }} />
       <div className="pr-skeleton-chips">
@@ -127,11 +129,11 @@ function PrRadarSkeleton() {
   );
 }
 
-export default function PrRadar() {
+function PrRadarView() {
   const info = useToolInfo<"pr-radar">();
   const [selectedBucket, setSelectedBucket] = useState<Bucket | null>(null);
 
-  if (!info.isSuccess) {
+  if (!info.isSuccess || !info.output) {
     return <PrRadarSkeleton />;
   }
 
@@ -212,5 +214,13 @@ export default function PrRadar() {
         {tokenLabel ? <span>{tokenLabel}</span> : null}
       </div>
     </div>
+  );
+}
+
+export default function PrRadar() {
+  return (
+    <ErrorBoundary>
+      <PrRadarView />
+    </ErrorBoundary>
   );
 }

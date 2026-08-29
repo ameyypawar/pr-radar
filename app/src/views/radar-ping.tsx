@@ -1,4 +1,5 @@
 import { useToolInfo } from "../helpers.js";
+import { ErrorBoundary } from "./error-boundary.js";
 import "./radar-ping.css";
 
 function initials(label: string): string {
@@ -18,12 +19,13 @@ function formatVerifiedAt(iso: string | undefined): string | undefined {
   });
 }
 
-export default function RadarPing() {
+function RadarPingView() {
   const info = useToolInfo<"radar-ping">();
 
-  if (!info.isSuccess) {
+  if (!info.isSuccess || !info.output) {
     return (
       <div className="rp-root">
+        <div className="rp-skeleton-label">Verifying your identity…</div>
         <div className="rp-card">
           <div className="rp-skeleton-avatar" />
           <div className="rp-identity" style={{ flex: 1 }}>
@@ -69,5 +71,13 @@ export default function RadarPing() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function RadarPing() {
+  return (
+    <ErrorBoundary>
+      <RadarPingView />
+    </ErrorBoundary>
   );
 }
