@@ -3,6 +3,15 @@
  * `process.env` directly — every key here is guaranteed present at runtime.
  */
 
+// Skybridge passes the inherited process environment to the server and does not
+// read .env itself, so the app loads it. Absent in deployment, where the platform
+// supplies the variables directly.
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env on disk — deployment supplies the environment
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -27,7 +36,7 @@ function flag(name: string): boolean {
 export const env = {
   /** AuthPlane authorization server issuer, e.g. http://localhost:9000 */
   AUTHPLANE_ISSUER: required("AUTHPLANE_ISSUER"),
-  /** AuthPlane OAuth client ID for the RFC 8693 token-exchange broker (Branch A). Optional — without it, `getGitHubToken()` skips straight to `GITHUB_TOKEN`. */
+  /** AuthPlane OAuth client ID for the RFC 8693 token-exchange broker (Branch A). Optional — without it, the exchange is skipped and `getGitHubToken()` fails unless `ALLOW_ENV_TOKEN_FALLBACK` is set (see below). */
   AUTHPLANE_CLIENT_ID: optional("AUTHPLANE_CLIENT_ID"),
   /** AuthPlane OAuth client secret for the RFC 8693 token-exchange broker (Branch A). Optional, paired with `AUTHPLANE_CLIENT_ID`. */
   AUTHPLANE_CLIENT_SECRET: optional("AUTHPLANE_CLIENT_SECRET"),
@@ -44,6 +53,4 @@ export const env = {
    * else, including unset, is disabled.
    */
   ALLOW_ENV_TOKEN_FALLBACK: flag("ALLOW_ENV_TOKEN_FALLBACK"),
-  /** GitHub login (username). No longer read on the broker path — `fetchOpenPullRequests` now searches `author:@me` and reads `viewer.login` from the token itself. Kept for a possible future `GITHUB_TOKEN` env-fallback identity story. */
-  GITHUB_LOGIN: optional("GITHUB_LOGIN"),
 };

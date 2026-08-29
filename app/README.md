@@ -23,8 +23,7 @@ Copy `.env.example` to `.env` and fill in:
 
 - `AUTHPLANE_ISSUER` — AuthPlane authorization server issuer URL
 - `SERVER_URL` — this server's public resource URL (e.g. `http://localhost:3000/mcp`)
-- `GITHUB_TOKEN` — GitHub PAT fallback for local dev (optional)
-- `GITHUB_LOGIN` — GitHub username (optional)
+- `GITHUB_TOKEN` — GitHub PAT fallback for local dev (optional). Inert without `ALLOW_ENV_TOKEN_FALLBACK` also set.
 - `AUTHPLANE_CLIENT_ID` / `AUTHPLANE_CLIENT_SECRET` — token-exchange broker client credentials (optional)
 
 See `src/env.ts` for which are required vs. optional.
