@@ -52,6 +52,38 @@ smoothest part of the whole stack.
    issuer moved to a public HTTPS URL. Exactly the kind of error message you want: it names the
    field, the condition, and the reason. No guessing.
 
+9. **🔴 The highest-value finding: Claude cannot connect to a default authserver, and the error
+   is actively misleading.** Claude's recommended OAuth path is CIMD (Client ID Metadata
+   Document). authserver fetches Claude's document correctly — then rejects the client outright:
+
+   ```
+   cimd auto-registration blocked by disabled grant
+     client_id=https://claude.ai/oauth/mcp-oauth-client-metadata
+     grant_types=[authorization_code refresh_token urn:ietf:params:oauth:grant-type:jwt-bearer]
+   ```
+
+   Claude advertises three grants; `jwt-bearer` is disabled by default, so authserver refuses the
+   *whole* client rather than registering it with the grants it does support. Three separate
+   problems compound here:
+
+   - **Interop.** Claude is the most common MCP client. Out of the box, against a
+     quickstart-configured authserver, its recommended connection mode fails. Intersecting the
+     advertised grants with the supported set (and registering the overlap) would make this work
+     with no configuration at all.
+   - **The error names a variable that does not exist.** It says *"set `AUTHPLANE_XAA_ENABLED=true`
+     to enable it"*. There is no such env var — `docs/guides/federation/README.md` states plainly:
+     "There is no `AUTHPLANE_XAA_ENABLED` env var. XAA is enabled via the YAML `xaa.enabled: true`
+     only." Following the error message verbatim leaves the server in exactly the same broken
+     state, which is the worst possible outcome for a first-run experience.
+   - **The user-facing message is wrong.** The browser shows *"Invalid Client — The client_id is
+     not recognized."* The client_id **was** recognized: authserver fetched and parsed the metadata
+     document successfully. The failure was grant-type validation. A user without server log access
+     has no path from that message to the fix.
+
+   Fix that actually works: `xaa: { enabled: true }` in `config.yaml`. Enabling an enterprise
+   federation feature to satisfy a grant-type check is a surprising requirement for "let Claude
+   sign in".
+
 ## Things that were notably good
 
 - **The boot-time feature self-check.** authserver prints a table of every subsystem
