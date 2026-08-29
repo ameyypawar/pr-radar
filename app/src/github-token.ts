@@ -147,14 +147,31 @@ async function exchangeForGitHubToken(
   return { ok: true, token: data.access_token };
 }
 
-/** Pulls `consent_url`/`consent_uri` out of an AuthPlane `consent_required` error body, if present. */
+/**
+ * Pulls `consent_url`/`consent_uri` out of an AuthPlane `consent_required` error body, if
+ * present, and validates it before it can reach an `href` or model-facing text.
+ *
+ * Validated with `new URL()` plus an explicit `http:`/`https:` protocol check — not Zod's
+ * `.url()`. `.url()` is not a substitute: it accepts `javascript:alert(1)` as a valid URL, since
+ * it checks URL well-formedness, not scheme. This value is rendered as an anchor `href` and
+ * interpolated into text shown to the model, so anything short of a real protocol allowlist
+ * would let a hostile or misconfigured error response reach both.
+ */
 function extractConsentUrl(rawBody: string): string | null {
   try {
     const parsed = JSON.parse(rawBody) as { error?: string; consent_url?: string; consent_uri?: string };
     if (parsed.error !== "consent_required") {
       return null;
     }
-    return parsed.consent_url ?? parsed.consent_uri ?? null;
+    const candidate = parsed.consent_url ?? parsed.consent_uri ?? null;
+    if (candidate === null) {
+      return null;
+    }
+    const url = new URL(candidate);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return candidate;
   } catch {
     return null;
   }

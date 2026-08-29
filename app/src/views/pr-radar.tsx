@@ -74,7 +74,8 @@ function tokenSourceLabel(source: string): string | null {
   }
 }
 
-function updatedLabel(staleDays: number): string {
+function updatedLabel(staleDays: number | null): string {
+  if (staleDays === null) return "last update unknown";
   if (staleDays <= 0) return "updated today";
   if (staleDays === 1) return "updated 1 day ago";
   return `updated ${staleDays} days ago`;

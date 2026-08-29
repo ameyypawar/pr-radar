@@ -25,15 +25,16 @@ export interface PullRequestSummary {
   ciState: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Days since the PR was opened. */
-  ageDays: number;
-  /** Days since the PR was last updated — the basis for the STALE bucket. */
-  staleDays: number;
+  /** Days since the PR was opened, or null if `createdAt` did not parse. */
+  ageDays: number | null;
+  /** Days since the PR was last updated — the basis for the STALE bucket — or null if `updatedAt` did not parse. */
+  staleDays: number | null;
 }
 
-function daysSince(iso: string, now: number): number {
+/** Returns null when `iso` does not parse as a date. "We don't know" must never collapse to 0. */
+function daysSince(iso: string, now: number): number | null {
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return 0;
+  if (Number.isNaN(then)) return null;
   return Math.max(0, Math.floor((now - then) / MS_PER_DAY));
 }
 
@@ -44,7 +45,9 @@ function ciStateOf(pr: RawPullRequest): string | null {
 /**
  * Buckets a raw PR node, precedence in this order: DRAFT, then
  * BLOCKED_ON_YOU (changes requested or failing or errored CI), then STALE
- * (no update in 14+ days), then WAITING_ON_MAINTAINER as the default.
+ * (no update in 14+ days, or an unparseable `updatedAt` — unknown activity is
+ * treated as stale-eligible, not as fresh), then WAITING_ON_MAINTAINER as the
+ * default.
  */
 export function triage(pr: RawPullRequest, now: number = Date.now()): PullRequestSummary {
   const isDraft = pr.isDraft === true;
@@ -58,7 +61,7 @@ export function triage(pr: RawPullRequest, now: number = Date.now()): PullReques
     bucket = "DRAFT";
   } else if (reviewDecision === "CHANGES_REQUESTED" || (ciState !== null && BLOCKING_CI_STATES.has(ciState))) {
     bucket = "BLOCKED_ON_YOU";
-  } else if (staleDays >= STALE_THRESHOLD_DAYS) {
+  } else if (staleDays === null || staleDays >= STALE_THRESHOLD_DAYS) {
     bucket = "STALE";
   } else {
     bucket = "WAITING_ON_MAINTAINER";
@@ -89,13 +92,24 @@ const BUCKET_SORT_ORDER: Record<Bucket, number> = {
 
 /**
  * Sorts triaged PRs for display: BLOCKED_ON_YOU, then STALE, then
- * WAITING_ON_MAINTAINER, then DRAFT; most recently updated first within
- * each bucket. Does not mutate the input array.
+ * WAITING_ON_MAINTAINER, then DRAFT; most recently updated first within each
+ * bucket, with an unparseable `updatedAt` sorting last within its bucket
+ * instead of poisoning the comparator. Does not mutate the input array.
  */
 export function sortPullRequestSummaries(prs: PullRequestSummary[]): PullRequestSummary[] {
   return [...prs].sort((a, b) => {
     const bucketDiff = BUCKET_SORT_ORDER[a.bucket] - BUCKET_SORT_ORDER[b.bucket];
     if (bucketDiff !== 0) return bucketDiff;
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+
+    // NaN-safe: `new Date(bad).getTime()` is NaN, and NaN is not a valid
+    // comparator result — it must never reach the `return` below un-guarded,
+    // or it can misorder well-formed neighbours too, not just the bad row.
+    const aTime = new Date(a.updatedAt).getTime();
+    const bTime = new Date(b.updatedAt).getTime();
+    const aValid = !Number.isNaN(aTime);
+    const bValid = !Number.isNaN(bTime);
+    if (aValid && bValid) return bTime - aTime;
+    if (aValid !== bValid) return aValid ? -1 : 1;
+    return 0; // both unparseable — tied, stable relative order
   });
 }
