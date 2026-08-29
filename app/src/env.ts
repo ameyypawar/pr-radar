@@ -18,6 +18,12 @@ function optional(name: string): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+/** Boolean-ish env var: only the exact strings "true" or "1" are enabled. Unset or any other value is disabled. */
+function flag(name: string): boolean {
+  const value = process.env[name];
+  return value === "true" || value === "1";
+}
+
 export const env = {
   /** AuthPlane authorization server issuer, e.g. http://localhost:9000 */
   AUTHPLANE_ISSUER: required("AUTHPLANE_ISSUER"),
@@ -27,8 +33,17 @@ export const env = {
   AUTHPLANE_CLIENT_SECRET: optional("AUTHPLANE_CLIENT_SECRET"),
   /** This server's public resource URL, e.g. http://localhost:3000/mcp */
   SERVER_URL: required("SERVER_URL"),
-  /** GitHub PAT fallback for local dev. Optional — prefer `getGitHubToken()` over reading this directly. */
+  /** GitHub PAT fallback for local dev. Optional — prefer `getGitHubToken()` over reading this directly. Only used when `ALLOW_ENV_TOKEN_FALLBACK` is enabled. */
   GITHUB_TOKEN: optional("GITHUB_TOKEN"),
+  /**
+   * Local-development escape hatch. Enables the `GITHUB_TOKEN` fallback in `getGitHubToken()`
+   * (app/src/github-token.ts) and the consent-required fallback branch in the `pr-radar` tool
+   * handler (app/src/server.ts) — without it, both paths hard-fail instead of silently
+   * substituting the operator's long-lived PAT for the caller's own `radar:read`-scoped access.
+   * Must stay unset in any deployment. Only the exact strings "true" or "1" enable it; anything
+   * else, including unset, is disabled.
+   */
+  ALLOW_ENV_TOKEN_FALLBACK: flag("ALLOW_ENV_TOKEN_FALLBACK"),
   /** GitHub login (username). No longer read on the broker path — `fetchOpenPullRequests` now searches `author:@me` and reads `viewer.login` from the token itself. Kept for a possible future `GITHUB_TOKEN` env-fallback identity story. */
   GITHUB_LOGIN: optional("GITHUB_LOGIN"),
 };

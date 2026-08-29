@@ -146,7 +146,7 @@ const server = new McpServer(
           };
         }
 
-        if (env.GITHUB_TOKEN) {
+        if (env.ALLOW_ENV_TOKEN_FALLBACK && env.GITHUB_TOKEN) {
           // Fallback token still works — degrade gracefully and keep going.
           token = env.GITHUB_TOKEN;
           source = "env";

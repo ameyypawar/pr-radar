@@ -37,31 +37,39 @@ export class ConsentRequiredError extends Error {
  *   only a short-lived access token crosses the wire, per call.
  * - Branch B (fallback): `env.GITHUB_TOKEN`, used when Branch A isn't
  *   applicable (no broker configured, no subject token on this request) or
- *   when it fails for a reason other than missing consent.
+ *   when it fails for a reason other than missing consent — and only when
+ *   `env.ALLOW_ENV_TOKEN_FALLBACK` is enabled. With the flag off, any of
+ *   those conditions falls straight through to the "no GitHub token
+ *   available" error below instead of substituting the operator's PAT.
  *
  * `extra` is the tool handler's `extra` (RequestHandlerExtra), passed
  * through untyped; Branch A reads the caller's AuthPlane access token off
  * `extra.authInfo.token`.
  */
 export async function getGitHubToken(extra: unknown): Promise<GitHubTokenResult> {
+  let fallbackReason = "unknown reason";
+
   try {
-    const brokered = await exchangeForGitHubToken(extra);
-    if (brokered) {
-      return { token: brokered, source: "broker" };
+    const result = await exchangeForGitHubToken(extra);
+    if (result.ok) {
+      return { token: result.token, source: "broker" };
     }
+    fallbackReason = result.reason;
   } catch (err) {
     if (err instanceof ConsentRequiredError) {
       throw err;
     }
-    console.warn("AuthPlane token exchange failed, falling back to GITHUB_TOKEN:", err);
+    console.warn("AuthPlane token exchange failed:", err);
+    fallbackReason = `AuthPlane token exchange threw: ${err instanceof Error ? err.message : String(err)}`;
   }
 
-  if (env.GITHUB_TOKEN) {
+  if (env.ALLOW_ENV_TOKEN_FALLBACK && env.GITHUB_TOKEN) {
+    console.warn(`Using GITHUB_TOKEN fallback (${fallbackReason}).`);
     return { token: env.GITHUB_TOKEN, source: "env" };
   }
 
   throw new Error(
-    "No GitHub token available. Connect your GitHub account to PR Radar, or set GITHUB_TOKEN in .env for local development.",
+    "No GitHub token available. Connect your GitHub account to PR Radar, or set GITHUB_TOKEN and ALLOW_ENV_TOKEN_FALLBACK in .env for local development.",
   );
 }
 
@@ -69,18 +77,26 @@ export async function getGitHubToken(extra: unknown): Promise<GitHubTokenResult>
  * Branch A: an RFC 8693 token exchange against AuthPlane, trading the
  * caller's own AuthPlane access token for a GitHub token scoped to them.
  *
- * Returns null (no throw) when the exchange plainly isn't applicable — no
- * subject token on this request, or no broker client configured — so
- * `getGitHubToken` falls through to Branch B quietly. Throws
- * `ConsentRequiredError` when the user needs to connect GitHub, and a plain
- * `Error` for any other non-2xx response.
+ * Returns `{ ok: false, reason }` (no throw) when the exchange plainly isn't
+ * applicable — no subject token on this request, or no broker client
+ * configured — or when AuthPlane answers 2xx with no `access_token` in the
+ * body. `reason` names which of those it was, so `getGitHubToken` can log it
+ * if it ends up using the env fallback; either way this function stays
+ * quiet itself and lets the caller decide. Throws `ConsentRequiredError`
+ * when the user needs to connect GitHub, and a plain `Error` for any other
+ * non-2xx response.
  */
-async function exchangeForGitHubToken(extra: unknown): Promise<string | null> {
+async function exchangeForGitHubToken(
+  extra: unknown,
+): Promise<{ ok: true; token: string } | { ok: false; reason: string }> {
   const clientId = env.AUTHPLANE_CLIENT_ID;
   const clientSecret = env.AUTHPLANE_CLIENT_SECRET;
   const subjectToken = (extra as { authInfo?: AuthInfo } | null | undefined)?.authInfo?.token;
   if (!subjectToken || !clientId || !clientSecret) {
-    return null;
+    return {
+      ok: false,
+      reason: "no subject token on this request, or no broker client configured (AUTHPLANE_CLIENT_ID/AUTHPLANE_CLIENT_SECRET)",
+    };
   }
 
   const body = new URLSearchParams({
@@ -122,7 +138,10 @@ async function exchangeForGitHubToken(extra: unknown): Promise<string | null> {
   }
 
   const data = (await response.json()) as { access_token?: string };
-  return data.access_token ?? null;
+  if (!data.access_token) {
+    return { ok: false, reason: "AuthPlane returned 2xx with no access_token in the response body" };
+  }
+  return { ok: true, token: data.access_token };
 }
 
 /** Pulls `consent_url`/`consent_uri` out of an AuthPlane `consent_required` error body, if present. */

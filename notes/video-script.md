@@ -39,7 +39,7 @@ are notes, not a script — say them in your own words, don't read them.
 | 2:50–3:10 | Scroll two or three PR rows — CI dot, review state, age | "Each row carries CI state, review state, and how long it's been sitting. Blocked-on-you means changes requested or failing CI." |
 | 3:10–3:30 | Click the **Blocked on you** chip, then the **Stale** chip | "Filtering happens in the view. No second round trip to the model." |
 | 3:30–3:50 | AuthPlane audit log, tailing. Show `broker_grant.created provider=github` | "Now the part that matters. This is the authorization server's audit log." |
-| 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "This server never holds a GitHub token. It presents its own audience-bound token, and AuthPlane exchanges it for a short-lived GitHub token — RFC 8693 — once per call." |
+| 3:50–4:15 | Next line: `upstream.token.issued provider=github scopes=public_repo` | "The GitHub refresh grant is encrypted inside AuthPlane and never reaches this server. It presents its own audience-bound token, and AuthPlane exchanges that for a short-lived GitHub token — RFC 8693 — once per call." |
 | 4:15–4:30 | Point at the `aes_master` line in the boot-time feature table | "The GitHub refresh grant is encrypted at rest under `aes_master` and never leaves the authorization server." |
 | 4:30–4:45 | Scroll back to `scopes=public_repo` in the audit line | "Note the scope: `public_repo`, not `repo`. Every PR being tracked is public, so the private surface was never needed and was never requested." |
 | 4:45–5:00 | Run `nudge-pr` on a stale PR. Client stops on the approval prompt — hold on it | "The write path carries a separate scope, `radar:nudge`, and the client still stops here for approval — because the tool declares `readOnlyHint: false`. Least privilege on both sides." |
@@ -77,10 +77,10 @@ server is AuthPlane authserver, self-hosted in Docker with SQLite storage and ES
 **Auth shape.** OAuth 2.1 with PKCE and dynamic client registration. Access tokens are
 audience-bound to this MCP server (RFC 8707), and the server publishes protected-resource metadata
 (RFC 9728), so the client discovers where to get a token rather than having it hardcoded. Two
-scopes: `radar:read` and `radar:nudge`. For GitHub, this server stores no token at all — it
-presents its own audience-bound token and AuthPlane brokers back a short-lived GitHub access token
-via RFC 8693 token exchange, per call. The GitHub refresh grant stays encrypted at rest inside
-AuthPlane. The exchange requests `public_repo`, not `repo`.
+scopes: `radar:read` and `radar:nudge`. For GitHub, the refresh grant is encrypted inside AuthPlane
+and never reaches this server — it presents its own audience-bound token instead, and AuthPlane
+brokers back a short-lived GitHub access token via RFC 8693 token exchange, per call. The exchange
+requests `public_repo`, not `repo`.
 
 **Setup feedback.** AuthPlane was answering on its discovery endpoint 13 seconds after `docker
 pull`. The one step nothing prompts you to create is the fronting link between a Mint resource and
