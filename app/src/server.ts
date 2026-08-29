@@ -22,11 +22,12 @@ function countByBucket(prs: PullRequestSummary[]) {
 }
 
 /** One-line, model-readable summary. Deliberately terse: the view renders the full list, so this must not enumerate individual PRs. */
-function summarize(totalCount: number, counts: ReturnType<typeof countByBucket>): string {
+function summarize(totalCount: number, counts: ReturnType<typeof countByBucket>, truncated: boolean): string {
   if (totalCount === 0) {
     return "You have no open pull requests.";
   }
-  return `Results are shown in the view above. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
+  const scopeNote = truncated ? ` (counts cover a partial subset, not the full ${totalCount})` : "";
+  return `Results are shown in the view above${scopeNote}. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
 }
 
 /** Readable message for any caught error, so handlers never leak `[object Object]` or a raw stack. */
@@ -93,6 +94,7 @@ const server = new McpServer(
       },
       outputSchema: {
         totalCount: z.number(),
+        truncated: z.boolean(),
         counts: z.object({
           blockedOnYou: z.number(),
           waitingOnMaintainer: z.number(),
@@ -158,6 +160,7 @@ const server = new McpServer(
           return {
             structuredContent: {
               totalCount: 0,
+              truncated: false,
               counts: { blockedOnYou: 0, waitingOnMaintainer: 0, stale: 0, draft: 0 },
               prs: [] as PullRequestSummary[],
               tokenSource: "none" as const,
@@ -181,12 +184,14 @@ const server = new McpServer(
       let issueCount: number;
       let rawPrs: RawPullRequest[];
       let login: string | undefined;
+      let truncated: boolean;
 
       try {
         const fetched = await fetchOpenPullRequests(token);
         issueCount = fetched.issueCount;
         rawPrs = fetched.prs;
         login = fetched.login;
+        truncated = fetched.truncated;
       } catch (err) {
         return {
           content: [
@@ -203,13 +208,14 @@ const server = new McpServer(
       return {
         structuredContent: {
           totalCount: issueCount,
+          truncated,
           counts,
           prs,
           login,
           tokenSource: source,
           connectPrompt,
         },
-        content: [{ type: "text" as const, text: summarize(issueCount, counts) }],
+        content: [{ type: "text" as const, text: summarize(issueCount, counts, truncated) }],
         isError: false,
       };
     },

@@ -2,7 +2,7 @@
 # `author:@me` resolves against the bearer token making the request.
 query($q: String!) {
   viewer { login }
-  search(query: $q, type: ISSUE, first: 40) {
+  search(query: $q, type: ISSUE, first: 100) {
     issueCount
     nodes {
       ... on PullRequest {

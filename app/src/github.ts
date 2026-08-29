@@ -13,7 +13,7 @@ const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
 const OPEN_PULL_REQUESTS_QUERY = `
   query($q: String!) {
     viewer { login }
-    search(query: $q, type: ISSUE, first: 40) {
+    search(query: $q, type: ISSUE, first: 100) {
       issueCount
       nodes {
         ... on PullRequest {
@@ -28,6 +28,10 @@ const OPEN_PULL_REQUESTS_QUERY = `
     }
   }
 `;
+
+// TODO: accounts with more than 100 open PRs need pageInfo { hasNextPage
+// endCursor } pagination — first: 100 is GitHub's per-page max for `search`,
+// and this fetch only ever requests the one page.
 
 /**
  * One PR node as returned by `OPEN_PULL_REQUESTS_QUERY`. Every nested field
@@ -57,10 +61,17 @@ export interface RawPullRequest {
 }
 
 export interface FetchOpenPullRequestsResult {
-  /** True count of every open PR matching the search, per GitHub — can exceed `prs.length` since the query caps at 40 nodes. */
+  /** True count of every open PR matching the search, per GitHub — can exceed `prs.length` since the query caps at 100 nodes. */
   issueCount: number;
-  /** Up to 40 fetched PR nodes. */
+  /** Up to 100 fetched PR nodes. */
   prs: RawPullRequest[];
+  /**
+   * True when `issueCount` exceeds `prs.length`, meaning the list is incomplete. This can be
+   * true because the page cap (100) dropped nodes, or because malformed nodes were filtered out
+   * of `prs` below — either way the rendered list is a subset, so both cases are correctly
+   * reported as truncated.
+   */
+  truncated: boolean;
   /** Login of the token holder, per `viewer.login`. Undefined if the response didn't include it — callers must not assume it is present. */
   login: string | undefined;
 }
@@ -127,5 +138,5 @@ export async function fetchOpenPullRequests(token: string): Promise<FetchOpenPul
 
   const login = json.data?.viewer?.login;
 
-  return { issueCount: search.issueCount, prs, login };
+  return { issueCount: search.issueCount, prs, truncated: search.issueCount > prs.length, login };
 }

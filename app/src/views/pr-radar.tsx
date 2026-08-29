@@ -121,7 +121,7 @@ export default function PrRadar() {
     return <PrRadarSkeleton />;
   }
 
-  const { totalCount, counts, prs, login, tokenSource, connectPrompt } = info.output;
+  const { totalCount, truncated, counts, prs, login, tokenSource, connectPrompt } = info.output;
   const visiblePrs = selectedBucket ? prs.filter((pr) => pr.bucket === selectedBucket) : prs;
 
   return (
@@ -139,6 +139,11 @@ export default function PrRadar() {
         <div className="pr-header-count">
           {totalCount} open PR{totalCount === 1 ? "" : "s"}
         </div>
+        {truncated ? (
+          <div className="pr-header-sub">
+            Showing {prs.length} of {totalCount}
+          </div>
+        ) : null}
         <div className="pr-header-sub">
           {counts.blockedOnYou} of {totalCount} need you
         </div>

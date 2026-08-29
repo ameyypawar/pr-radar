@@ -24,5 +24,5 @@ Precedence: `DRAFT` → `BLOCKED_ON_YOU` → `STALE` → `WAITING_ON_MAINTAINER`
 ## Notes / gotchas
 - `reviewDecision` is `null` on repos without review requirements — render as "—", never crash.
 - `statusCheckRollup` is `null` when a repo runs no checks — same.
-- `search` caps at 100 per page; `first: 40` is plenty for the demo.
+- `search` caps at 100 per page; the query uses `first: 100` to cover today's dataset with headroom. `truncated` in the tool output (and the view header) surfaces it directly when a dataset outgrows that cap, rather than assuming it never will.
 - The nudge write action should target PRs in the `STALE` bucket only.
