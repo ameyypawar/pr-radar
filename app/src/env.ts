@@ -13,9 +13,18 @@ function required(name: string): string {
   return value;
 }
 
+function optional(name: string): string | undefined {
+  const value = process.env[name];
+  return value && value.length > 0 ? value : undefined;
+}
+
 export const env = {
   /** AuthPlane authorization server issuer, e.g. http://localhost:9000 */
   AUTHPLANE_ISSUER: required("AUTHPLANE_ISSUER"),
   /** This server's public resource URL, e.g. http://localhost:3000/mcp */
   SERVER_URL: required("SERVER_URL"),
+  /** GitHub PAT fallback for local dev. Optional — prefer `getGitHubToken()` over reading this directly. */
+  GITHUB_TOKEN: optional("GITHUB_TOKEN"),
+  /** GitHub login (username) whose PRs are searched. Optional until the AuthPlane token broker is wired. */
+  GITHUB_LOGIN: optional("GITHUB_LOGIN"),
 };
