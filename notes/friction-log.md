@@ -89,11 +89,22 @@ smoothest part of the whole stack.
      quickstart-configured authserver, its recommended connection mode fails. Intersecting the
      advertised grants with the supported set (and registering the overlap) would make this work
      with no configuration at all.
-   - **The error names a variable that does not exist.** It says *"set `AUTHPLANE_XAA_ENABLED=true`
-     to enable it"*. There is no such env var — `docs/guides/federation/README.md` states plainly:
-     "There is no `AUTHPLANE_XAA_ENABLED` env var. XAA is enabled via the YAML `xaa.enabled: true`
-     only." Following the error message verbatim leaves the server in exactly the same broken
-     state, which is the worst possible outcome for a first-run experience.
+   - **The error names a variable the docs affirmatively say does not exist.** It says *"set
+     `AUTHPLANE_XAA_ENABLED=true` to enable it"*. This is not a documentation gap — the docs
+     don't merely omit the variable, they deny it. `docs/guides/federation/README.md` states
+     plainly: "There is no `AUTHPLANE_XAA_ENABLED` env var. XAA is enabled via the YAML
+     `xaa.enabled: true` only." The generated reference agrees:
+     `docs/reference/configuration.md#config-xaa` lists `xaa.enabled` with its Env var column
+     left as an em-dash — the same notation the table uses for every field with no override —
+     rather than leaving the row out entirely. So the error message points an operator at a fix
+     that the maintainers' own documentation says doesn't exist: hit the error, search the docs
+     for the variable it names, and land on a page stating outright that there is no such
+     variable. There is no path from the error message to the fix. Following it verbatim leaves
+     the server in exactly the same broken state, which is the worst possible outcome for a
+     first-run experience. We have not read AuthPlane's Go source, so we can't say which side is
+     wrong — whether the variable exists in the binary and is simply undocumented, or doesn't
+     exist and the error string is stale — only that the error and the docs contradict each
+     other, which is itself a more useful bug report than guessing at a cause would be.
    - **The user-facing message is wrong.** The browser shows *"Invalid Client — The client_id is
      not recognized."* The client_id **was** recognized: authserver fetched and parsed the metadata
      document successfully. The failure was grant-type validation. A user without server log access
@@ -101,7 +112,11 @@ smoothest part of the whole stack.
 
    Fix that actually works: `xaa: { enabled: true }` in `config.yaml`. Enabling an enterprise
    federation feature to satisfy a grant-type check is a surprising requirement for "let Claude
-   sign in".
+   sign in". Suggested fixes, as options: (a) have the error name the YAML key (`xaa.enabled`)
+   instead of an env var, since the YAML key is the only lever confirmed to work; (b) reconcile
+   the error and the docs in whichever direction is correct, since one of them is wrong: either
+   `AUTHPLANE_XAA_ENABLED` is real and belongs in the docs, or it isn't and the error string
+   needs to stop naming it.
 
 10. **A session that didn't survive the move to a public issuer, and a client-side failure that
     said nothing about it.** We first wrote this up as "restarting the AS invalidates sessions."
