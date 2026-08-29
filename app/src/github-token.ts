@@ -93,8 +93,10 @@ async function exchangeForGitHubToken(extra: unknown): Promise<string | null> {
     // user's stored GitHub connection and mints a scoped token from it —
     // their GitHub refresh token never leaves AuthPlane.
     resource: "github",
-    // scope: WHAT we're asking to do there.
-    scope: "repo",
+    // scope: WHAT we're asking to do there — public_repo, not repo: every
+    // tracked PR lives in a public repo, so we don't ask for repo's
+    // implicit private-repo read/write.
+    scope: "public_repo",
   });
 
   // client_secret_basic: this server authenticates itself to AuthPlane with
