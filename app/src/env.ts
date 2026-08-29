@@ -21,6 +21,10 @@ function optional(name: string): string | undefined {
 export const env = {
   /** AuthPlane authorization server issuer, e.g. http://localhost:9000 */
   AUTHPLANE_ISSUER: required("AUTHPLANE_ISSUER"),
+  /** AuthPlane OAuth client ID for the RFC 8693 token-exchange broker (Branch A). Optional — without it, `getGitHubToken()` skips straight to `GITHUB_TOKEN`. */
+  AUTHPLANE_CLIENT_ID: optional("AUTHPLANE_CLIENT_ID"),
+  /** AuthPlane OAuth client secret for the RFC 8693 token-exchange broker (Branch A). Optional, paired with `AUTHPLANE_CLIENT_ID`. */
+  AUTHPLANE_CLIENT_SECRET: optional("AUTHPLANE_CLIENT_SECRET"),
   /** This server's public resource URL, e.g. http://localhost:3000/mcp */
   SERVER_URL: required("SERVER_URL"),
   /** GitHub PAT fallback for local dev. Optional — prefer `getGitHubToken()` over reading this directly. */

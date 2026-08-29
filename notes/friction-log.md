@@ -84,6 +84,18 @@ smoothest part of the whole stack.
    federation feature to satisfy a grant-type check is a surprising requirement for "let Claude
    sign in".
 
+10. **Restarting the AS silently invalidates browser sessions, and the client-side failure is
+    opaque.** After restarting authserver to enable broker features, Claude's connect flow failed
+    with only `Authorization with PR RADAR failed … reference ofid_…`. Server-side the cause was
+    plain — `/oauth/authorize` 303-ing to `/login` in a retry loop because the browser session was
+    gone — but nothing surfaced that to the user. Signing in again at `/login` fixed it instantly.
+
+11. **Post-login lands on a 404.** The login form submits `redirect=""`, and on success redirects
+    to `/`, which is not served on the public port (the admin UI is on `:9001`). So a successful
+    login *looks* like a failure: you get "404 page not found" even though the session cookie was
+    set correctly and `/oauth/authorize` immediately starts working. Landing on a simple "you're
+    signed in, you can close this tab" page would remove a genuinely confusing dead end.
+
 ## Things that were notably good
 
 - **The boot-time feature self-check.** authserver prints a table of every subsystem

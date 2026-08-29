@@ -62,6 +62,30 @@
   }
 }
 
+/* Connect banner */
+
+.pr-connect-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--pr-waiting-bg);
+  color: var(--pr-waiting-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pr-connect-banner-link {
+  flex: none;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
 /* Header */
 
 .pr-header {

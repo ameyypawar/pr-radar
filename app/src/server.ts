@@ -1,8 +1,8 @@
 import { authplaneProvider, McpServer } from "skybridge/server";
 import { z } from "zod";
 import { env } from "./env.js";
-import { getGitHubToken } from "./github-token.js";
-import { fetchOpenPullRequests } from "./github.js";
+import { ConsentRequiredError, getGitHubToken, type GitHubTokenSource } from "./github-token.js";
+import { fetchOpenPullRequests, type RawPullRequest } from "./github.js";
 import type { Bucket, PullRequestSummary } from "./triage.js";
 import { sortPullRequestSummaries, triage } from "./triage.js";
 
@@ -30,6 +30,11 @@ function summarize(totalCount: number, prs: PullRequestSummary[]): string {
   const changesRequested = blocked.filter((pr) => pr.reviewDecision === "CHANGES_REQUESTED").length;
   const failingCi = blocked.filter((pr) => pr.ciState === "FAILURE").length;
   return `${blocked.length} of ${totalCount} open PRs need you: ${changesRequested} with changes requested, ${failingCi} with failing CI.`;
+}
+
+/** Readable message for any caught error, so handlers never leak `[object Object]` or a raw stack. */
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 const server = new McpServer(
@@ -85,8 +90,70 @@ const server = new McpServer(
         throw new Error("GITHUB_LOGIN is not set. Add it to .env before calling pr-radar.");
       }
 
-      const { token, source } = await getGitHubToken(extra);
-      const { issueCount, prs: rawPrs } = await fetchOpenPullRequests(token, env.GITHUB_LOGIN);
+      let token: string;
+      let source: GitHubTokenSource;
+      let connectPrompt: { needed: true; url: string; reason: string } | undefined;
+
+      try {
+        ({ token, source } = await getGitHubToken(extra));
+      } catch (err) {
+        if (!(err instanceof ConsentRequiredError)) {
+          return {
+            content: [{ type: "text" as const, text: `Could not get a GitHub token: ${errorMessage(err)}` }],
+            isError: true,
+          };
+        }
+
+        if (env.GITHUB_TOKEN) {
+          // Fallback token still works — degrade gracefully and keep going.
+          token = env.GITHUB_TOKEN;
+          source = "env";
+          connectPrompt = {
+            needed: true,
+            url: err.consentUrl,
+            reason: "GitHub is not linked to your account yet — showing results from the server's fallback token.",
+          };
+        } else {
+          // No fallback either — nothing to render. Ask the user to connect, without erroring the call.
+          return {
+            structuredContent: {
+              totalCount: 0,
+              counts: { blockedOnYou: 0, waitingOnMaintainer: 0, stale: 0, draft: 0 },
+              prs: [] as PullRequestSummary[],
+              login: env.GITHUB_LOGIN,
+              tokenSource: "none" as const,
+              connectPrompt: {
+                needed: true as const,
+                url: err.consentUrl,
+                reason: "GitHub is not linked to your account yet — connect it to see your pull requests.",
+              },
+            },
+            content: [
+              {
+                type: "text" as const,
+                text: `GitHub isn't connected yet. Open this URL to connect your account: ${err.consentUrl}`,
+              },
+            ],
+            isError: false,
+          };
+        }
+      }
+
+      let issueCount: number;
+      let rawPrs: RawPullRequest[];
+
+      try {
+        const fetched = await fetchOpenPullRequests(token, env.GITHUB_LOGIN);
+        issueCount = fetched.issueCount;
+        rawPrs = fetched.prs;
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Failed to fetch pull requests from GitHub: ${errorMessage(err)}` },
+          ],
+          isError: true,
+        };
+      }
 
       const allPrs = sortPullRequestSummaries(rawPrs.map((pr) => triage(pr)));
       const counts = countByBucket(allPrs);
@@ -99,6 +166,7 @@ const server = new McpServer(
           prs,
           login: env.GITHUB_LOGIN,
           tokenSource: source,
+          connectPrompt,
         },
         content: [{ type: "text" as const, text: summarize(issueCount, allPrs) }],
         isError: false,

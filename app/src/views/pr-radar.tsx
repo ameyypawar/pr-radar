@@ -121,11 +121,20 @@ export default function PrRadar() {
     return <PrRadarSkeleton />;
   }
 
-  const { totalCount, counts, prs, login, tokenSource } = info.output;
+  const { totalCount, counts, prs, login, tokenSource, connectPrompt } = info.output;
   const visiblePrs = selectedBucket ? prs.filter((pr) => pr.bucket === selectedBucket) : prs;
 
   return (
     <div className="pr-root">
+      {connectPrompt?.needed ? (
+        <div className="pr-connect-banner">
+          <span>{connectPrompt.reason}</span>
+          <a className="pr-connect-banner-link" href={connectPrompt.url} target="_blank" rel="noreferrer">
+            Connect GitHub
+          </a>
+        </div>
+      ) : null}
+
       <div className="pr-header">
         <div className="pr-header-count">
           {totalCount} open PR{totalCount === 1 ? "" : "s"}
