@@ -101,6 +101,7 @@ export async function fetchOpenPullRequests(token: string): Promise<FetchOpenPul
       "User-Agent": "pr-radar",
     },
     body: JSON.stringify({ query: OPEN_PULL_REQUESTS_QUERY, variables: { q } }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {

@@ -38,14 +38,16 @@ function summarize(
   totalCount: number,
   counts: ReturnType<typeof countByBucket>,
   truncated: boolean,
+  tokenSource: GitHubTokenSource,
   bucket?: Bucket,
 ): string {
   if (totalCount === 0) {
     return "You have no open pull requests.";
   }
+  const sourceNote = tokenSource === "env" ? "These are the server's fallback account's pull requests, not yours. " : "";
   const scopeNote = truncated ? ` (counts cover a partial subset, not the full ${totalCount})` : "";
   const lead = bucket ? `${counts[BUCKET_COUNT_KEY[bucket]]} ${BUCKET_TEXT[bucket]}. ` : "";
-  return `${lead}Results are shown in the view above${scopeNote}. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
+  return `${sourceNote}${lead}Results are shown in the view above${scopeNote}. ${counts.blockedOnYou} blocked on you, ${counts.waitingOnMaintainer} waiting on a maintainer, ${counts.stale} stale, ${counts.draft} draft.`;
 }
 
 /** Readable message for any caught error, so handlers never leak `[object Object]` or a raw stack. */
@@ -234,7 +236,7 @@ const server = new McpServer(
           tokenSource: source,
           connectPrompt,
         },
-        content: [{ type: "text" as const, text: summarize(issueCount, counts, truncated, input.bucket) }],
+        content: [{ type: "text" as const, text: summarize(issueCount, counts, truncated, source, input.bucket) }],
         isError: false,
       };
     },
@@ -247,10 +249,15 @@ const server = new McpServer(
       inputSchema: {
         repo: z
           .string()
-          .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/, 'Must be "owner/name".')
+          .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/(?!\.{1,2}$)[A-Za-z0-9._-]+$/, 'Must be "owner/name".')
           .describe('Repository as "owner/name", e.g. "OpenHands/OpenHands".'),
         number: z.number().int().positive().describe("Pull request number."),
         message: z.string().optional().describe("Custom nudge text. Defaults to a generic check-in message."),
+      },
+      outputSchema: {
+        wouldPostTo: z.string(),
+        body: z.string(),
+        dryRun: z.boolean(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       auth: { scopes: ["radar:nudge"] },

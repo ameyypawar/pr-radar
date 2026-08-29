@@ -1,6 +1,19 @@
 /**
- * Swappable GitHub token source. This is the seam: everything else in the
- * app calls `getGitHubToken()` and doesn't care which branch resolved it.
+ * Swappable GitHub token source, with two resolution paths.
+ *
+ * Path 1 — the normal case: everything calls `getGitHubToken()` and doesn't
+ * care whether Branch A (broker exchange) or Branch B (env fallback)
+ * resolved the token; both return the same `{ token, source }` shape.
+ *
+ * Path 2 — consent required: `getGitHubToken()` deliberately does not apply
+ * the env fallback itself when the broker throws `ConsentRequiredError` (see
+ * that class's doc comment below) — it always rethrows. The one caller,
+ * `pr-radar`'s handler in server.ts, decides what to do with that: it
+ * reimplements the same `env.ALLOW_ENV_TOKEN_FALLBACK && env.GITHUB_TOKEN`
+ * gate to either degrade gracefully with a connect-prompt banner or fail
+ * gracefully asking the user to connect. That gate is duplicated verbatim
+ * across both files — whoever changes the fallback policy has to update
+ * both.
  */
 
 import type { AuthInfo } from "skybridge/server";
@@ -68,8 +81,11 @@ export async function getGitHubToken(extra: unknown): Promise<GitHubTokenResult>
     return { token: env.GITHUB_TOKEN, source: "env" };
   }
 
+  console.error(
+    `GitHub token broker exchange failed (${fallbackReason}). No GITHUB_TOKEN fallback available (set GITHUB_TOKEN and ALLOW_ENV_TOKEN_FALLBACK in .env to enable one for local development).`,
+  );
   throw new Error(
-    `GitHub token broker exchange failed (${fallbackReason}). This is a server-side problem, not a missing GitHub connection — reconnecting will not fix it. For local development only, set GITHUB_TOKEN and ALLOW_ENV_TOKEN_FALLBACK in .env.`,
+    "GitHub token broker exchange failed. This is a server-side problem, not a missing GitHub connection — reconnecting will not fix it. Try again shortly, or contact whoever administers this server if it persists.",
   );
 }
 
@@ -129,6 +145,7 @@ async function exchangeForGitHubToken(
       Authorization: `Basic ${credentials}`,
     },
     body,
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {
@@ -148,31 +165,53 @@ async function exchangeForGitHubToken(
 }
 
 /**
- * Pulls `consent_url`/`consent_uri` out of an AuthPlane `consent_required` error body, if
- * present, and validates it before it can reach an `href` or model-facing text.
+ * Pulls a consent URL out of an AuthPlane `consent_required` error body — always resolving to a
+ * safe, usable URL when the body IS a consent_required error, so `null` means exactly one thing:
+ * "this was not a consent_required error" (unparseable body, or a different `error` value). That
+ * distinction matters to the caller: `null` falls through to the generic broker-failure error,
+ * anything else throws `ConsentRequiredError` (see #29 — the two cases were previously conflated,
+ * so a consent error with no usable URL was indistinguishable from a non-consent failure, and the
+ * user was told reconnecting would not help when it was exactly the fix).
  *
- * Validated with `new URL()` plus an explicit `http:`/`https:` protocol check — not Zod's
+ * `consent_url`/`consent_uri`, when present, is resolved against `env.AUTHPLANE_ISSUER` as the
+ * base — recovering the common case where AuthPlane sends a relative path like "/connect/github"
+ * — then validated with `new URL()` plus an explicit `http:`/`https:` protocol check, not Zod's
  * `.url()`. `.url()` is not a substitute: it accepts `javascript:alert(1)` as a valid URL, since
- * it checks URL well-formedness, not scheme. This value is rendered as an anchor `href` and
- * interpolated into text shown to the model, so anything short of a real protocol allowlist
- * would let a hostile or misconfigured error response reach both.
+ * it checks URL well-formedness, not scheme. This allowlist is unchanged by #29 and gates the
+ * actual returned value either way — an absolute candidate is checked as-is (`new URL` ignores
+ * the base once the candidate is already absolute), so a hostile or malformed scheme is rejected
+ * exactly as before.
+ *
+ * What #29 changes is what happens on rejection: a missing, malformed, or disallowed-scheme
+ * candidate no longer collapses to `null` (which the caller would mistake for "not a consent
+ * error"). It still IS a consent_required error, so this falls back to `env.AUTHPLANE_ISSUER`
+ * itself — a trusted, developer-configured value, never the rejected candidate — so the caller
+ * can still send the user to connect GitHub instead of reporting an unfixable server-side
+ * problem. The raw candidate is never returned once it fails the allowlist.
  */
 function extractConsentUrl(rawBody: string): string | null {
+  let parsed: { error?: string; consent_url?: string; consent_uri?: string };
   try {
-    const parsed = JSON.parse(rawBody) as { error?: string; consent_url?: string; consent_uri?: string };
-    if (parsed.error !== "consent_required") {
-      return null;
-    }
-    const candidate = parsed.consent_url ?? parsed.consent_uri ?? null;
-    if (candidate === null) {
-      return null;
-    }
-    const url = new URL(candidate);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
-    }
-    return candidate;
+    parsed = JSON.parse(rawBody);
   } catch {
     return null;
   }
+  if (parsed.error !== "consent_required") {
+    return null;
+  }
+
+  const candidate = parsed.consent_url ?? parsed.consent_uri ?? null;
+  if (candidate !== null) {
+    try {
+      const url = new URL(candidate, env.AUTHPLANE_ISSUER);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        return url.href;
+      }
+    } catch {
+      // Malformed even after resolving against the issuer — fall through to the issuer fallback
+      // below rather than returning null.
+    }
+  }
+
+  return env.AUTHPLANE_ISSUER;
 }

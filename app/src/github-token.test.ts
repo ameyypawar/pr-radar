@@ -95,16 +95,26 @@ describe("getGitHubToken", () => {
     env.ALLOW_ENV_TOKEN_FALLBACK = ORIGINAL_ENV.ALLOW_ENV_TOKEN_FALLBACK;
   });
 
-  test("a consent_required body whose consent_url is javascript:alert(1) is rejected", async () => {
+  // Issue #29 changed what happens once javascript:alert(1) is rejected by the allowlist: a
+  // consent_required error with an unusable consent_url now still surfaces as connect-required
+  // (see the "unusable consent_url" test below) instead of collapsing to a generic broker
+  // failure. So this must still become a ConsentRequiredError — what must NOT happen, and what
+  // this test actually guards, is the rejected scheme ever reaching `.consentUrl` itself, since
+  // that value is rendered as an href.
+  test("a consent_required body whose consent_url is javascript:alert(1) never exposes that scheme", async () => {
     setBrokerEnv({ clientId: "client-id", clientSecret: "client-secret", allowFallback: false, token: undefined });
     mockFetchJson({ error: "consent_required", consent_url: "javascript:alert(1)" });
 
     await assert.rejects(
       () => getGitHubToken(WITH_SUBJECT_TOKEN),
       (err: unknown) => {
+        if (!(err instanceof ConsentRequiredError)) {
+          assert.fail(`expected ConsentRequiredError (unusable scheme still surfaces as connect-required), got ${String(err)}`);
+        }
+        assert.notEqual(err.consentUrl, "javascript:alert(1)", "the rejected scheme must never reach .consentUrl verbatim");
         assert.ok(
-          !(err instanceof ConsentRequiredError),
-          "javascript: consent_url must not produce a ConsentRequiredError — .consentUrl is rendered as an href",
+          err.consentUrl.startsWith("http://") || err.consentUrl.startsWith("https://"),
+          `.consentUrl must be an http(s) URL, got ${err.consentUrl}`,
         );
         return true;
       },
@@ -153,16 +163,15 @@ describe("getGitHubToken", () => {
     );
   });
 
-  // Issue #29: extractConsentUrl (github-token.ts) returns null for a
+  // Issue #29 (fixed): extractConsentUrl (github-token.ts) used to return null for a
   // consent_required body with no usable consent_url/consent_uri, so
-  // exchangeForGitHubToken throws a plain Error instead of
-  // ConsentRequiredError, and getGitHubToken's final message tells the user
+  // exchangeForGitHubToken threw a plain Error instead of
+  // ConsentRequiredError, and getGitHubToken's final message told the user
   // "reconnecting will not fix it" — backwards for exactly this case.
   // Correct behaviour: still throw ConsentRequiredError so the caller can
-  // prompt reconnect. Unskip when #29 lands.
+  // prompt reconnect.
   test(
     "consent_required with an unusable consent_url still surfaces as connect-required",
-    { skip: 'known defect, issue #29: falls through to the generic "reconnecting will not fix it" error instead' },
     async () => {
       const unusableBodies = [
         { error: "consent_required" },
