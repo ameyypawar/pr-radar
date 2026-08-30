@@ -11,8 +11,10 @@
 #   cloudflared   fronts the AuthPlane OAuth server. Can stay alive with zero
 #                 live edge connections ("up but wedged"). Probed via its own
 #                 metrics /ready endpoint, which reports readyConnections.
-#                 ALARM ONLY — after migration it runs under launchd, which
-#                 restarts it on crash. We must not fight another supervisor.
+#                 ALARM ONLY, and not by choice: it is a root-owned system
+#                 LaunchDaemon and this script is unprivileged. launchd covers
+#                 a non-zero exit only — a WEDGE is not an exit, so nothing
+#                 recovers it without a human. See check_cloudflared.
 #
 #   AuthPlane     the OAuth issuer, read fresh from app/.env every iteration so
 #                 a re-point (quick tunnel -> named tunnel) is picked up with no
@@ -428,9 +430,19 @@ on_signal() {
 
 CF_VERDICT="unknown"   # carried into the issuer alarm as diagnostic context
 
-# cloudflared — ALARM ONLY. Under launchd it restarts itself; a second
-# supervisor would fight it. "Up but zero ready connections" is the wedged
-# state the old watchdog was structurally blind to, and counts as unhealthy.
+# cloudflared — ALARM ONLY, and we cannot act even if we wanted to: it is a
+# root-owned system LaunchDaemon (com.cloudflare.cloudflared) and this script
+# runs unprivileged. Restarting it needs sudo, so it is an operator step.
+#
+# launchd is NOT a general safety net here. The plist sets
+# KeepAlive={SuccessfulExit=false}, so launchd relaunches it only when it exits
+# NON-ZERO (5s ThrottleInterval). Three distinct outcomes:
+#   crashed (non-zero exit) -> launchd relaunches; wait ~15s.
+#   exited cleanly (zero)   -> launchd does nothing. Human required.
+#   WEDGED (alive, readyConnections=0) -> not an exit at all, so launchd never
+#                              sees an event. Nothing anywhere recovers this.
+# The wedge is the state the old watchdog was structurally blind to, and it is
+# the one that silently strands the issuer while every process looks fine.
 check_cloudflared() {
     local port body rc responder=""
     for port in $CF_METRICS_PORTS; do
@@ -440,7 +452,7 @@ check_cloudflared() {
 
     if [ -z "$responder" ]; then
         CF_VERDICT="no metrics responder on localhost:${CF_METRICS_PORTS// /,}"
-        log_alarm "cloudflared: DOWN — $CF_VERDICT. Externally supervised (launchd); NOT restarting from here."
+        log_alarm "cloudflared: DOWN — $CF_VERDICT. Process gone. launchd relaunches it ONLY on a non-zero exit; a clean exit is not retried. Cannot act from here (root-owned LaunchDaemon, this script is unprivileged). If it is not back in ~15s, a human runs: sudo launchctl kickstart -k system/com.cloudflare.cloudflared"
         return 1
     fi
 
@@ -454,7 +466,7 @@ check_cloudflared() {
 
     if [ "$rc" -lt 1 ]; then
         CF_VERDICT="readyConnections=$rc on localhost:$responder/ready"
-        log_alarm "cloudflared: WEDGED — daemon alive but $CF_VERDICT (no live edge connection). Externally supervised (launchd); NOT restarting from here."
+        log_alarm "cloudflared: WEDGED — daemon alive but $CF_VERDICT (no live edge connection). NOTHING WILL FIX THIS ON ITS OWN: the process has not exited, so launchd sees no event, and this script is unprivileged. Do not wait for a recovery. A human must run: sudo launchctl kickstart -k system/com.cloudflare.cloudflared — then expect readyConnections>=1 and the issuer back to 200."
         return 1
     fi
 

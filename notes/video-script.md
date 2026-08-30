@@ -4,8 +4,13 @@ Target length: **5:00 hard cap**. One take per section, cut between sections. Sp
 are notes, not a script — say them in your own words, don't read them.
 
 - Video URL: `TODO`
-- Public repo URL: `TODO`
-- Total build time: `TODO`
+- Public repo URL: `https://github.com/ameyypawar/pr-radar`
+- Total build time: `13 hours`
+- Open PR total: **78 open PRs across 22 public repositories**
+
+`78` is the canonical value for this file. It is spoken and written in three other places — the
+0:00–0:15 screen cell, the 0:00–0:15 narration (spelled out in words), and the submission recap at
+the bottom. The pre-flight re-verify step below names all four; change them together or not at all.
 
 ## Before you hit record
 
@@ -21,9 +26,24 @@ are notes, not a script — say them in your own words, don't read them.
       curl -s -o /dev/null -w '%{http_code}\n' https://cyan-schools-roll-396.alpic.dev/.well-known/oauth-protected-resource/mcp
       # expect 200
       ```
-- [ ] **Re-verify the GitHub total** under `is:open is:pr author:@me archived:false` still reads 77
-      immediately before recording — a newly archived tracked repo changes the number the opening
-      shot puts on screen.
+- [ ] **Re-verify the GitHub total** immediately before recording — a merged PR or a newly archived
+      tracked repo changes the number the opening shot puts on screen. It has already gone stale
+      once.
+      ```
+      gh api -X GET search/issues -f q='is:open is:pr author:@me archived:false' \
+        --jq '.total_count'
+      # expect 78
+      gh api -X GET search/issues -f q='is:open is:pr author:@me archived:false' -f per_page=100 \
+        --jq '[.items[].repository_url] | unique | length'
+      # expect 22
+      ```
+      **If either number moved, update every one of these four before recording — the count is
+      duplicated and nothing cross-checks it:**
+      1. the `Open PR total` line at the top of this file (the canonical one),
+      2. the `0:00–0:15` row's screen cell in the shot list (`— 78 results`),
+      3. the `0:00–0:15` row's narration in the same row — **spelled out in words**
+         ("Seventy-eight…"), so a digit-only find-and-replace will miss it,
+      4. the first line of the submission recap under **Text recap for the submission form**.
 - [ ] **Run `/prs`, hover the `@<login>` in the header, and confirm the tooltip reads "token via
       GitHub connection."** There is no footer any more. The token source is a `title` on the
       account name in the header's second line (`<N> open PRs · @<login>`), so it is revealed by
@@ -41,29 +61,70 @@ are notes, not a script — say them in your own words, don't read them.
       reading should be unreachable — check anyway. This is the auth story the whole video narrates.
 - [ ] **Close the DevTools panel and the model-context sidebar.** The view is the thing being
       demoed; nothing else should compete with it for screen space.
-- [ ] **Last thing before you hit record — stop the supervisor**, from the repo root:
-      ```
-      ./infra/supervise.sh --stop      # names the pid it stopped
-      ./infra/supervise.sh --status    # expect "not running"
-      ```
-      `infra/supervise.sh` probes `POST localhost:3000/mcp` and the public `/mcp`; on three
-      consecutive misses (six seconds, sometimes more) it kills the whole `skybridge dev` tree — or
-      the `alpic tunnel` tree — and cold-starts it, dropping every live MCP session mid-take. It is
-      an asset between takes and a liability during one. **Also don't touch anything under
-      `app/src/` while recording**: `skybridge dev` watches that directory itself and respawns its
-      server child on any change, supervisor or no supervisor.
+- [ ] **Leave the supervisor running.** Do not stop it for the take. The tunnel dies on its own far
+      too often to record without a watchdog: over the ~13 hours in `infra/logs/supervise.log`,
+      `alpic tunnel` was found down and restarted **16 times, spread across 12 different hours** —
+      three of them in the 14:00 hour alone. **13 of those 16 recovered on their own in about five
+      or six seconds.** The other three (08:27, 14:11, 14:29) had a restart attempt fail outright
+      after 30s and only came back on a later cycle — so recovery is the strong default, not a
+      guarantee. Two of the three were in the last hour, so treat the tunnel as *less* settled
+      right now, not more.
 
-      Re-arm it after the last take, from the repo root:
+      The reasoning, because it inverts what looks intuitive: when the tunnel dies, the live MCP
+      session is already gone — **killed by the tunnel dying, not by the restart**. The supervisor
+      cannot cost you a session that is already lost; it gives it back in seconds. Stop the
+      supervisor and that same tunnel death is simply unrecovered, and the take is lost for good.
+      The residual risk — the supervisor bouncing a *healthy* dev server — needs three consecutive
+      failed probes (`CONFIRM_ATTEMPTS=3`, `CONFIRM_GAP=3`), which means it genuinely was not
+      serving.
+
+      Confirm it is up, from the repo root:
       ```
-      nohup ./infra/supervise.sh > /dev/null 2>&1 &
       ./infra/supervise.sh --status    # expect "running (pid ...)"
       ```
+- [ ] **Record in short takes, and re-check the stack immediately before each one.** Short takes
+      bound what a mid-take drop can cost you. From the repo root, this covers all four gates —
+      supervisor, the MCP endpoint, its protected-resource metadata, and the authorization server:
+      ```
+      ISS=$(/usr/bin/grep -oE '^AUTHPLANE_ISSUER=.*' app/.env | cut -d= -f2-)
+      ./infra/supervise.sh --status \
+        && curl -s -o /dev/null -w 'mcp %{http_code}\n' -X POST \
+             https://cyan-schools-roll-396.alpic.dev/mcp \
+        && curl -s -o /dev/null -w 'prm %{http_code}\n' \
+             https://cyan-schools-roll-396.alpic.dev/.well-known/oauth-protected-resource/mcp \
+        && curl -s -o /dev/null -w 'iss %{http_code}\n' \
+             "$ISS/.well-known/oauth-authorization-server"
+      # expect: "running (pid ...)", then "mcp 401", "prm 200", "iss 200"
+      ```
+      The issuer is read out of `app/.env` rather than hardcoded, because it has already moved once
+      (it was a `trycloudflare.com` hostname earlier today, now `auth.tubio.pro`). Keep the
+      `/usr/bin/grep` spelled out: a bare `grep` is a shell function here that skips gitignored
+      files, and `app/.env` is gitignored — if it ever returns nothing, `$ISS` goes empty and the
+      last gate silently checks a garbage URL instead of failing loudly.
+- [ ] **Do not edit anything under `app/src/` while recording.** This is separate from the
+      supervisor and still true: `skybridge dev` watches that directory itself and respawns its own
+      server child on any change. The supervisor does not watch files and neither causes nor
+      prevents this — leaving it running does not protect you here. No file edits mid-take.
 
 ## Shot list
 
+> **Re-run the `iss` gate immediately before the two auth blocks — 1:15–2:00 (sign-in and consent)
+> and 3:30–4:15 (the audit log).** Those shots go through `auth.tubio.pro`, and that hostname is the
+> one part of the stack with no watchdog at all: it went unreachable 18 times in the 13 hours of
+> `infra/logs/supervise.log`, across 11 different hours, most recently at 14:25. Every one of those
+> 18 was alarm-only — the supervisor is explicit that it will not act, and nothing else does either.
+> See **cloudflared wedged** under *If something goes wrong mid-take*; recovery is a manual step and
+> needs `sudo`, so it is not something you want to discover halfway through a take.
+>
+> ```
+> curl -s -o /dev/null -w 'iss %{http_code}\n' \
+>   "$(/usr/bin/grep -oE '^AUTHPLANE_ISSUER=.*' app/.env | cut -d= -f2-)/.well-known/oauth-authorization-server"
+> # expect 200
+> ```
+
 | Time | What's on screen | What you say |
 |---|---|---|
-| 0:00–0:15 | GitHub PR list, filtered to `is:open is:pr author:@me archived:false` — 77 results | "Seventy-seven open pull requests across twenty-two public repositories." |
+| 0:00–0:15 | GitHub PR list, filtered to `is:open is:pr author:@me archived:false` — 78 results | "Seventy-eight open pull requests across twenty-two public repositories." |
 | 0:15–0:30 | Scroll the list once, slowly, then stop | "The question is never *what are my PRs*. It's *which ones are blocked on me right now*, and nothing here answers that." |
 | 0:30–0:50 | Terminal. `curl -si -X POST https://cyan-schools-roll-396.alpic.dev/mcp` | "Before any of that — the server is gated. An unauthenticated call to `/mcp` gets a 401 before a single tool handler runs." |
 | 0:50–1:15 | Highlight the `WWW-Authenticate` header, specifically `resource_metadata=...` | "The 401 carries the address of the protected-resource metadata, RFC 9728. The server publishes where to get a token — nothing is hardcoded in the client." |
@@ -86,10 +147,56 @@ Approve on camera and hold on the dry-run response — that line is the honest p
 - **Blank or empty view region.** The `tool-result` notification was missed. Hard refresh, warm up
   with one throwaway `/prs`, retake the section. **Do not debug on camera** — it never resolves in
   under a minute and the take is already lost.
-- **Tunnel dropped — `/mcp` returns 404.** The supervisor fixes this, but it is stopped for the
-  take. Re-arm it (`nohup ./infra/supervise.sh > /dev/null 2>&1 &`), give it up to a minute,
-  re-run the pre-flight `curl` until it reads 401, then stop it again
-  (`./infra/supervise.sh --stop`) before the retake. Nothing to fix by hand.
+- **Tunnel dropped — `/mcp` returns 404 or 000.** The take is already lost the moment the tunnel
+  died, so stop recording. The supervisor is running and is already on it: it detects the drop
+  after three consecutive failed probes and restarts `alpic tunnel`, and in 13 of 16 observed cases
+  the endpoint was back within about six seconds. Do nothing by hand. Re-run the health line until
+  it reads `mcp 401`, then retake:
+  ```
+  ./infra/supervise.sh --status \
+    && curl -s -o /dev/null -w 'mcp %{http_code}\n' -X POST \
+         https://cyan-schools-roll-396.alpic.dev/mcp
+  ```
+  If it has not come back after a couple of minutes, a restart attempt failed (this happened three
+  times overnight). Check `infra/logs/supervise.log` for `tunnel: RESTART FAILED` and
+  `infra/logs/alpic-tunnel.log` for the reason. The supervisor keeps retrying on its own cycle —
+  it recovered without intervention every time — so wait it out rather than restarting anything
+  by hand mid-session.
+- **cloudflared wedged — the sign-in, consent, or audit-log shots fail, and the `iss` gate returns
+  530 or 000.** This is the one failure in the stack that **nothing recovers on its own**, so it is
+  the one worth recognising fast. Confirm it before doing anything:
+  ```
+  /usr/bin/grep 'cloudflared: WEDGED' infra/logs/supervise.log | tail -3
+  ```
+  A wedge means the daemon is alive but holding zero live edge connections
+  (`readyConnections=0`). Because the process never exited, launchd sees no event — its plist sets
+  `KeepAlive={SuccessfulExit=false}`, which relaunches only on a **non-zero exit** — so launchd will
+  not act. The supervisor will not act either, and could not if it wanted to: cloudflared is a
+  root-owned system LaunchDaemon (`/Library/LaunchDaemons/com.cloudflare.cloudflared.plist`) and
+  `infra/supervise.sh` runs unprivileged. **Do not wait for a recovery that is not coming.**
+
+  Recovery is a manual operator step and needs `sudo`, which is why it lives here and not in any
+  script:
+  ```
+  sudo launchctl kickstart -k system/com.cloudflare.cloudflared
+  ```
+  Then confirm recovery in two stages — first that the daemon has a live edge connection again,
+  then that the issuer is actually answering. The metrics port is not fixed (cloudflared takes the
+  first free port in 20241–20245, and it has already moved from 20241 to 20242 today), so scan the
+  range rather than assuming one:
+  ```
+  for p in 20241 20242 20243 20244 20245; do
+    b=$(curl -s --max-time 2 "http://localhost:$p/ready" 2>/dev/null)
+    [ -n "$b" ] && { echo "port $p: $b"; break; }
+  done
+  # expect readyConnections >= 1
+
+  curl -s -o /dev/null -w 'iss %{http_code}\n' \
+    "$(/usr/bin/grep -oE '^AUTHPLANE_ISSUER=.*' app/.env | cut -d= -f2-)/.well-known/oauth-authorization-server"
+  # expect 200
+  ```
+  This briefly takes the issuer down while it reconnects, so never run it mid-take — stop
+  recording first, recover, re-run the full pre-flight health line, then retake.
 - **"Open full radar" does nothing.** Fullscreen is the host's to grant, and the board only draws
   once it has. Retake the shot; if it fails twice, narrate the same point over the inline view and
   drop the board — it is one shot, not the demo.
@@ -99,14 +206,18 @@ Approve on camera and hold on the dry-run response — that line is the honest p
 
 ## Text recap for the submission form
 
-Paste as-is. Fill the three `TODO`s first.
+Two things to check before this leaves the file. One `TODO` — the video URL, below and at the top
+of this file; fill it first. And the PR count in the first line of the recap: it must equal the
+`Open PR total` at the top of this file, which the pre-flight step re-verified. This text gets
+pasted into a submission form where nothing will catch a stale number.
 
 ---
 
 **PR Radar** — an MCP App on Skybridge that triages my open pull requests into who-acts-next
-buckets, with AuthPlane in front of it. Repo: `TODO`. Video: `TODO`. Built in `TODO`.
+buckets, with AuthPlane in front of it. Repo: `https://github.com/ameyypawar/pr-radar`.
+Video: `TODO`. Built in 13 hours.
 
-I have 77 open pull requests across 22 public repositories. The question I need answered isn't
+I have 78 open pull requests across 22 public repositories. The question I need answered isn't
 "what are my PRs" — it's "which ones are blocked on me right now". PR Radar answers that inside the
 MCP client, as an interactive React view: buckets for blocked-on-you (changes requested or failing
 or errored CI), waiting-on-maintainer, stale at 14+ days, and draft.
