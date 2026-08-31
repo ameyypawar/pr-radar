@@ -29,6 +29,24 @@ is encrypted at rest inside AuthPlane and never reaches this server.
 
 Scopes are enforced per tool: `radar:read` to view your radar, `radar:nudge` for the write-capable tool — a dry run today.
 
+## How it fits together
+
+One `pr-radar` call, end to end — the **401** that starts it, discovery and dynamic
+client registration, sign-in and consent, the audience-bound token, the RFC 8693
+exchange for a short-lived GitHub token, the GraphQL query, and the triage into buckets.
+
+![Sequence diagram of a single pr-radar call. The MCP client requests /mcp and is refused with HTTP 401 plus a resource-metadata pointer; it discovers the AuthPlane authorization server, registers dynamically via RFC 7591, and sends the user through sign-in and consent. AuthPlane mints an access token whose audience is bound to this server; Skybridge verifies it against the JWKS. The tool then performs an RFC 8693 token exchange against the GitHub broker resource to obtain a short-lived GitHub access token, queries the GitHub GraphQL API for the user's open pull requests, and triages them into blocked-on-you, stale, waiting-on-maintainer, and draft buckets before rendering the view.](docs/pr-radar-flow.png)
+
+The same system by trust boundary — what runs in the browser, on Alpic, in the local
+Docker container, and at GitHub, and which credentials never cross those lines.
+
+<details>
+<summary>Architecture diagram — components and trust boundaries</summary>
+
+![Cloud architecture diagram spanning four trust boundaries. The browser holds the MCP client and the consent screens. The Alpic cloud hosts the Skybridge MCP App with its server tools and React views. A developer laptop runs the AuthPlane authserver in Docker, exposing the public OAuth surface on port 9000 and the admin API on port 9001, backed by a SQLite volume holding the encrypted GitHub refresh grant. GitHub sits outside as the OAuth provider and the GraphQL API. Arrows show which component talks to which across each boundary, and where the token exchange happens.](docs/pr-radar-architecture.png)
+
+</details>
+
 ## Running the authorization server
 
 AuthPlane authserver ships as a prebuilt image; there's no compose file or
@@ -134,6 +152,7 @@ on every later run.
 app/     Skybridge MCP App (server tools + React views)
 infra/   AuthPlane authserver config + setup (prebuilt image, no local Dockerfile)
 notes/   Setup timings and friction log
+docs/    Architecture and call-flow diagrams
 ```
 
 ## Status
