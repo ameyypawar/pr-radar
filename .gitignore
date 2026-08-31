@@ -30,3 +30,6 @@ infra/*.txt
 
 # Conversation exports — never publish these
 20*-*.txt
+
+# Recording notes — not for the public repo
+notes/video-script.md
